@@ -146,9 +146,8 @@ workflows:
           fi
           echo "Using scheme: $SCHEME_NAME"
           
-          # 创建导出配置 plist
-          cat > exportOptions.plist <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
+          # 创建导出配置 plist（使用 echo 多行方式，避免 YAML 解析问题）
+          echo '<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -156,12 +155,11 @@ workflows:
     <string>ad-hoc</string>
     <key>provisioningProfiles</key>
     <dict>
-        <key>$BUNDLE_ID</key>
-        <string>$BUNDLE_ID</string>
+        <key>'$BUNDLE_ID'</key>
+        <string>'$BUNDLE_ID'</string>
     </dict>
 </dict>
-</plist>
-EOF
+</plist>' > exportOptions.plist
           
           # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true

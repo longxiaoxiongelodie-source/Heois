@@ -19,6 +19,13 @@ workflows:
         script: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source "$HOME/.cargo/env"
+          echo "export PATH=\"\$HOME/.cargo/bin:\$PATH\"" >> $CM_BUILD_DIR/.profile
+          rustc --version
+          cargo --version
+
+      - name: Install Rust iOS targets
+        script: |
+          source "$HOME/.cargo/env"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
       - name: Install dependencies
@@ -33,9 +40,19 @@ workflows:
 
       - name: Generate iOS project
         script: |
+          source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
+          
+          echo "Current directory: $(pwd)"
+          echo "Checking Rust installation:"
+          rustc --version
+          cargo --version
+          
           if [ ! -d src-tauri/gen/apple ]; then
+            echo "Initializing Tauri iOS project..."
             npx tauri ios init
+          else
+            echo "Tauri iOS project already exists"
           fi
 
       - name: Fix Bundle ID
@@ -43,7 +60,20 @@ workflows:
           cd "$TAURI_APP_DIR"
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
+            echo "Fixing Bundle ID in $PROJECT_PATH"
             sed -i '' 's/com.baiyu.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
+            echo "Bundle ID fixed"
+          else
+            echo "No Xcode project found, skipping Bundle ID fix"
+          fi
+
+      - name: Apply provisioning profiles
+        script: |
+          cd "$TAURI_APP_DIR"
+          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
+          if [ -n "$PROJECT_PATH" ]; then
+            keychain initialize
+            xcode-project use-profiles --project "$PROJECT_PATH"
           fi
 
       - name: Build IPA with Codemagic signing
@@ -52,10 +82,16 @@ workflows:
           cd "$TAURI_APP_DIR"
           
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: No Xcode project found"
+            exit 1
+          fi
+          
           PROJECT_DIR=$(dirname "$PROJECT_PATH")
           cd "$PROJECT_DIR"
           
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
+          echo "Using scheme: $SCHEME_NAME"
           
           # 让 Codemagic 自动处理签名
           xcode-project build-ipa \

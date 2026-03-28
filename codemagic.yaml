@@ -74,7 +74,7 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           
-          # 删除旧的 iOS 项目（如果存在）
+          # 删除旧的 iOS 项目
           rm -rf src-tauri/gen/apple
           
           # 重新生成
@@ -82,6 +82,29 @@ workflows:
           npx tauri ios init
           
           echo "iOS project generated"
+
+      - name: Fix Bundle ID safely
+        script: |
+          cd "$TAURI_APP_DIR"
+          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
+          if [ -n "$PROJECT_PATH" ]; then
+            PBXPROJ="$PROJECT_PATH/project.pbxproj"
+            
+            echo "=== Original Bundle ID values ==="
+            grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5
+            
+            echo "=== Fixing Bundle ID ==="
+            # 使用 sed 精确替换
+            sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.baiyu.ministar;/PRODUCT_BUNDLE_IDENTIFIER = app.kiwi4193.andromeda2796;/g' "$PBXPROJ"
+            
+            echo "=== Fixed Bundle ID values ==="
+            grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5
+            
+            # 也修改 Info.plist
+            find src-tauri/gen/apple -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "app.kiwi4193.andromeda2796" {} \; 2>/dev/null || true
+            
+            echo "Bundle ID fixed"
+          fi
 
       - name: Build IPA
         script: |
@@ -114,7 +137,7 @@ workflows:
           
           mkdir -p "$CM_BUILD_DIR/build"
           
-          # 先尝试清理
+          # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
           # 构建 archive

@@ -59,8 +59,7 @@ workflows:
           cd "$TAURI_APP_DIR"
           CONFIG="src-tauri/tauri.conf.json"
           
-          # 直接写入正确的 Bundle ID 配置
-          cat > "$CONFIG" << 'EOF'
+          cat > "$CONFIG" << 'JSONEOF'
 {
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -89,8 +88,9 @@ workflows:
     "windows": []
   }
 }
-EOF
+JSONEOF
           echo "tauri.conf.json configured with correct Bundle ID"
+          cat "$CONFIG" | head -20
 
       - name: Generate iOS project
         script: |

@@ -106,6 +106,30 @@ workflows:
           echo "Found Xcode projects:"
           find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
 
+      - name: Fix Bundle ID in Xcode project
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: No Xcode project found"
+            exit 1
+          fi
+          
+          echo "Fixing Bundle ID in $PROJECT_PATH"
+          echo "Before fix:"
+          grep -r "com.baiyu.ministar" "$PROJECT_PATH" || echo "Not found"
+          
+          # 修改 project.pbxproj 中的 Bundle ID
+          sed -i '' "s/com.baiyu.ministar/app.kiwi4193.andromeda2796/g" "$PROJECT_PATH/project.pbxproj"
+          
+          # 修改 Info.plist 中的 Bundle ID
+          find src-tauri/gen/apple -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "app.kiwi4193.andromeda2796" {} \; 2>/dev/null || true
+          
+          echo "After fix:"
+          grep -r "app.kiwi4193.andromeda2796" "$PROJECT_PATH" || echo "Check failed"
+
       - name: Apply provisioning profiles
         script: |
           set -euxo pipefail
@@ -163,7 +187,11 @@ workflows:
           # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
-          # 构建 archive（直接使用 UUID）
+          # 查找可用的证书
+          echo "Finding available signing identities..."
+          security find-identity -v -p codesigning
+          
+          # 构建 archive
           mkdir -p "$CM_BUILD_DIR/build"
           xcodebuild archive \
             -project "$(basename "$PROJECT_PATH")" \
@@ -171,7 +199,7 @@ workflows:
             -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
             -configuration Release \
             -sdk iphoneos \
-            CODE_SIGN_IDENTITY="iPhone Distribution: Smith T (3K3Y88J6DX)" \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
             CODE_SIGN_STYLE="Manual" \
             PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_UUID" \
             DEVELOPMENT_TEAM="$APPLE_DEVELOPMENT_TEAM" \

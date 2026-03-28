@@ -115,8 +115,8 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           
-          echo "Building iOS app with ad-hoc export method..."
-          npx tauri ios build --export-method ad-hoc
+          echo "Building iOS app with release-testing export method..."
+          npx tauri ios build --export-method release-testing
           
           echo "Build completed, checking for IPA..."
           find src-tauri/gen/apple/build -name "*.ipa" -print || echo "No IPA found yet"

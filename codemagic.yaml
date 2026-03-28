@@ -19,7 +19,6 @@ workflows:
         script: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source "$HOME/.cargo/env"
-          echo "export PATH=\"\$HOME/.cargo/bin:\$PATH\"" >> $CM_BUILD_DIR/.profile
           rustc --version
           cargo --version
 
@@ -64,7 +63,7 @@ workflows:
             xcode-project use-profiles --project "$PROJECT_PATH"
           fi
 
-      - name: Build IPA with Codemagic signing
+      - name: Build IPA with manual signing
         script: |
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
@@ -81,19 +80,49 @@ workflows:
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
           echo "Using scheme: $SCHEME_NAME"
           
-          # 查看可用的证书和描述文件
+          # 查看可用的证书
           echo "=== Available signing identities ==="
           security find-identity -v -p codesigning
           
+          # 查看可用的描述文件
           echo "=== Available provisioning profiles ==="
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles"
           
-          # 使用 verbose 模式构建
-          xcode-project build-ipa \
-            --project "$(basename "$PROJECT_PATH")" \
-            --scheme "$SCHEME_NAME" \
-            --verbose
+          # 清理
+          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
+          
+          # 创建 archive
+          mkdir -p "$CM_BUILD_DIR/build"
+          xcodebuild archive \
+            -project "$(basename "$PROJECT_PATH")" \
+            -scheme "$SCHEME_NAME" \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_STYLE="Manual" \
+            PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
+            DEVELOPMENT_TEAM="3K3Y88J6DX" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES 2>&1 | tee build.log
+          
+          # 检查构建是否成功
+          if [ ! -d "$CM_BUILD_DIR/build/ministar.xcarchive" ]; then
+            echo "Archive failed, showing last 100 lines of build log:"
+            tail -100 build.log
+            exit 1
+          fi
+          
+          # 导出 IPA
+          cp "$CM_BUILD_DIR/exportOptions.plist" ./
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ipa" \
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates
+          
+          echo "Build completed"
+          ls -la "$CM_BUILD_DIR/build/ipa/"
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa
+      - build/ipa/*.ipa

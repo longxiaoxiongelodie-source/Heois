@@ -14,6 +14,7 @@ workflows:
         TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
         TAURI_SRC_DIR: "$CM_BUILD_DIR/mobile/tauri/src-tauri"
         APPLE_DEVELOPMENT_TEAM: "3K3Y88J6DX"
+        PROVISIONING_PROFILE_UUID: "f708b7ef-a0b5-4dd8-a233-3b7d78519e1f"
       xcode: latest
       node: 22.22.2
 
@@ -119,24 +120,19 @@ workflows:
           
           echo "Using project: $PROJECT_PATH"
           
+          # 确保描述文件目录存在
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          
+          # 列出已安装的描述文件
+          echo "Installed provisioning profiles:"
+          ls -la "$PROFILES_DIR/" || echo "No profiles found"
+          
+          # 初始化 keychain
           keychain initialize
+          
+          # 使用 xcode-project 应用描述文件
           xcode-project use-profiles --project "$PROJECT_PATH"
-          
-          # 验证描述文件是否安装成功
-          echo "Verifying provisioning profiles installed..."
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
-          
-          echo "Checking for profile matching Bundle ID: $BUNDLE_ID"
-          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
-            if [ -f "$profile" ]; then
-              PROFILE_BUNDLE=$(security cms -D -i "$profile" 2>/dev/null | grep -A1 "application-identifier" | grep "$BUNDLE_ID" || echo "")
-              if [ -n "$PROFILE_BUNDLE" ]; then
-                echo "Found matching profile: $(basename "$profile")"
-                echo "Profile details:"
-                security cms -D -i "$profile" 2>/dev/null | grep -E "Name|TeamIdentifier|application-identifier" | head -10
-              fi
-            fi
-          done
 
       - name: Build signed IPA
         script: |
@@ -167,7 +163,7 @@ workflows:
           # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
-          # 构建 archive
+          # 构建 archive（直接使用 UUID）
           mkdir -p "$CM_BUILD_DIR/build"
           xcodebuild archive \
             -project "$(basename "$PROJECT_PATH")" \
@@ -175,9 +171,9 @@ workflows:
             -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
             -configuration Release \
             -sdk iphoneos \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_IDENTITY="iPhone Distribution: Smith T (3K3Y88J6DX)" \
             CODE_SIGN_STYLE="Manual" \
-            PROVISIONING_PROFILE_SPECIFIER="$BUNDLE_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_UUID" \
             DEVELOPMENT_TEAM="$APPLE_DEVELOPMENT_TEAM" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES

@@ -159,6 +159,9 @@ workflows:
             -configuration Release \
             -sdk iphoneos \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_STYLE="Manual" \
+            PROVISIONING_PROFILE_SPECIFIER="$BUNDLE_ID" \
+            DEVELOPMENT_TEAM="" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES
           
@@ -166,7 +169,8 @@ workflows:
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
             -exportPath "$CM_BUILD_DIR/build/ipa" \
-            -exportOptionsPlist exportOptions.plist
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates
           
           echo "Build completed"
           ls -la "$CM_BUILD_DIR/build/ipa/"
@@ -176,8 +180,6 @@ workflows:
           set -euxo pipefail
           echo "Searching for generated artifacts..."
           find "$CM_BUILD_DIR/build" -name "*.ipa" -print || true
-          find "$CM_BUILD_DIR" -name "*.ipa" -print 2>/dev/null || true
 
     artifacts:
       - build/ipa/*.ipa
-      - build/**/*.ipa

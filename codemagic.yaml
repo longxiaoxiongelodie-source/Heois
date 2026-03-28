@@ -127,7 +127,6 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           
-          # 找到 Xcode 项目路径
           PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
           if [ -z "$PROJECT_PATH" ]; then
             echo "ERROR: No Xcode project found"
@@ -139,27 +138,46 @@ workflows:
           
           cd "$PROJECT_DIR"
           
-          # 获取 scheme 名称
           SCHEME_NAME=$(find . -name "*.xcscheme" -exec basename {} .xcscheme \; | head -n 1)
           if [ -z "$SCHEME_NAME" ]; then
             SCHEME_NAME="app"
           fi
           echo "Using scheme: $SCHEME_NAME"
           
-          # 使用 Codemagic 内置命令构建 IPA
-          xcode-project build-ipa \
-            --project "$(basename "$PROJECT_PATH")" \
-            --scheme "$SCHEME_NAME" \
-            --export-method ad-hoc
+          # 复制 exportOptions.plist 到当前目录
+          cp "$CM_BUILD_DIR/exportOptions.plist" ./
+          
+          # 清理
+          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
+          
+          # 构建 archive
+          mkdir -p "$CM_BUILD_DIR/build"
+          xcodebuild archive \
+            -project "$(basename "$PROJECT_PATH")" \
+            -scheme "$SCHEME_NAME" \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+          
+          # 导出 IPA
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ipa" \
+            -exportOptionsPlist exportOptions.plist
           
           echo "Build completed"
+          ls -la "$CM_BUILD_DIR/build/ipa/"
 
       - name: List generated artifacts
         script: |
           set -euxo pipefail
           echo "Searching for generated artifacts..."
-          find "$CM_BUILD_DIR" -name "*.ipa" -print || true
+          find "$CM_BUILD_DIR/build" -name "*.ipa" -print || true
+          find "$CM_BUILD_DIR" -name "*.ipa" -print 2>/dev/null || true
 
     artifacts:
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa
-      - build/ios/ipa/*.ipa
+      - build/ipa/*.ipa
+      - build/**/*.ipa

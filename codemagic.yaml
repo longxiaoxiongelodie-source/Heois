@@ -118,11 +118,8 @@ workflows:
           echo "=== Certificates before build ==="
           security find-identity -v -p codesigning
           
-          if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
-            cp "$CM_BUILD_DIR/exportOptions.plist" ./
-          else
-            echo "WARNING: exportOptions.plist not found, creating default..."
-            cat > exportOptions.plist << 'EOF'
+          # 创建 exportOptions.plist
+          cat > exportOptions.plist << 'PLISTEOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -136,8 +133,7 @@ workflows:
     </dict>
 </dict>
 </plist>
-EOF
-          fi
+PLISTEOF
           
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
@@ -164,8 +160,7 @@ EOF
             echo "Build completed"
             ls -la "$CM_BUILD_DIR/build/ipa/"
           else
-            echo "Archive failed, showing last 50 lines of build log:"
-            tail -50 ~/Library/Logs/DiagnosticReports/* 2>/dev/null || echo "No logs found"
+            echo "Archive failed"
             exit 1
           fi
 

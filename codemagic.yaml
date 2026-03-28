@@ -83,7 +83,11 @@ workflows:
           cd "$TAURI_APP_DIR"
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
-            sed -i '' 's/com.baiyu.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
+            echo "Fixing Bundle ID in $PROJECT_PATH"
+            # 先备份
+            cp "$PROJECT_PATH/project.pbxproj" "$PROJECT_PATH/project.pbxproj.bak"
+            # 只替换 PRODUCT_BUNDLE_IDENTIFIER 的值
+            sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.baiyu.ministar;/PRODUCT_BUNDLE_IDENTIFIER = app.kiwi4193.andromeda2796;/g' "$PROJECT_PATH/project.pbxproj"
             echo "Bundle ID fixed"
           fi
 
@@ -93,8 +97,9 @@ workflows:
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
             echo "Removing Build Rust Code script from project..."
+            cp "$PROJECT_PATH/project.pbxproj" "$PROJECT_PATH/project.pbxproj.bak2"
+            # 删除包含 Build Rust Code 的行
             sed -i '' '/Build Rust Code/d' "$PROJECT_PATH/project.pbxproj"
-            sed -i '' '/Script-[0-9A-F]*\.sh/d' "$PROJECT_PATH/project.pbxproj"
             echo "Script removed"
           fi
 
@@ -126,6 +131,15 @@ workflows:
             echo "ERROR: exportOptions.plist not found in repository"
             exit 1
           fi
+          
+          # 验证项目文件是否有效
+          echo "Validating project file..."
+          plutil -lint "$(basename "$PROJECT_PATH")/project.pbxproj" || {
+            echo "Project file is damaged, restoring from backup..."
+            if [ -f "$PROJECT_PATH/project.pbxproj.bak" ]; then
+              cp "$PROJECT_PATH/project.pbxproj.bak" "$PROJECT_PATH/project.pbxproj"
+            fi
+          }
           
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           

@@ -43,16 +43,8 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           
-          echo "Current directory: $(pwd)"
-          echo "Checking Rust installation:"
-          rustc --version
-          cargo --version
-          
           if [ ! -d src-tauri/gen/apple ]; then
-            echo "Initializing Tauri iOS project..."
             npx tauri ios init
-          else
-            echo "Tauri iOS project already exists"
           fi
 
       - name: Fix Bundle ID
@@ -60,11 +52,7 @@ workflows:
           cd "$TAURI_APP_DIR"
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
-            echo "Fixing Bundle ID in $PROJECT_PATH"
             sed -i '' 's/com.baiyu.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
-            echo "Bundle ID fixed"
-          else
-            echo "No Xcode project found, skipping Bundle ID fix"
           fi
 
       - name: Apply provisioning profiles
@@ -93,10 +81,18 @@ workflows:
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
           echo "Using scheme: $SCHEME_NAME"
           
-          # 让 Codemagic 自动处理签名
+          # 查看可用的证书和描述文件
+          echo "=== Available signing identities ==="
+          security find-identity -v -p codesigning
+          
+          echo "=== Available provisioning profiles ==="
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles"
+          
+          # 使用 verbose 模式构建
           xcode-project build-ipa \
             --project "$(basename "$PROJECT_PATH")" \
-            --scheme "$SCHEME_NAME"
+            --scheme "$SCHEME_NAME" \
+            --verbose
 
     artifacts:
       - build/ios/ipa/*.ipa

@@ -104,6 +104,44 @@ workflows:
           echo "Found Xcode projects:"
           find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
 
+      - name: Fix Xcode project - add Development Team
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: No Xcode project found"
+            exit 1
+          fi
+          
+          PBXPROJ="$PROJECT_PATH/project.pbxproj"
+          echo "Fixing $PBXPROJ"
+          
+          # 备份原文件
+          cp "$PBXPROJ" "$PBXPROJ.bak"
+          
+          # 移除所有 DEVELOPMENT_TEAM 的现有设置
+          sed -i '' '/DEVELOPMENT_TEAM/d' "$PBXPROJ"
+          
+          # 移除所有 CODE_SIGN_STYLE 的现有设置
+          sed -i '' '/CODE_SIGN_STYLE/d' "$PBXPROJ"
+          
+          # 找到第一个 buildSettings 并插入 DEVELOPMENT_TEAM 和 CODE_SIGN_STYLE
+          # 使用 awk 来处理，因为 sed 在复杂插入时不太好用
+          awk '
+          /buildSettings = {/ {
+            print $0
+            print "				DEVELOPMENT_TEAM = \"\";"
+            print "				CODE_SIGN_STYLE = Manual;"
+            next
+          }
+          { print }
+          ' "$PBXPROJ.bak" > "$PBXPROJ"
+          
+          echo "Fixed project.pbxproj"
+          grep -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE" "$PBXPROJ" || echo "No team found"
+
       - name: Apply provisioning profiles
         script: |
           set -euxo pipefail

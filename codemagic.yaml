@@ -20,46 +20,39 @@ workflows:
         script: |
           set -euxo pipefail
           
-          echo "=== Checking Codemagic certificate directories ==="
-          # Codemagic 会把证书放在这些环境变量指向的目录
-          echo "CM_CERTIFICATES_DIR: ${CM_CERTIFICATES_DIR:-not set}"
-          echo "CM_PROVISIONING_PROFILES_DIR: ${CM_PROVISIONING_PROFILES_DIR:-not set}"
-          
-          # 搜索整个系统找证书
           echo "=== Searching for .p12 files ==="
           find /Users/builder -name "*.p12" -type f 2>/dev/null | while read f; do
             echo "Found: $f"
           done
           
-          # 查找第一个证书
           CERT_FILE=$(find /Users/builder -name "*.p12" -type f 2>/dev/null | head -n 1)
           
           if [ -z "$CERT_FILE" ]; then
-            echo "ERROR: No .p12 certificate found in /Users/builder"
-            echo "Trying to find in Codemagic temp directories..."
-            find /tmp -name "*.p12" -type f 2>/dev/null | head -5
+            echo "ERROR: No .p12 certificate found"
             exit 1
           fi
           
           echo "=== Found certificate: $CERT_FILE ==="
           
-          # 导入证书
           echo "Importing certificate..."
           security import "$CERT_FILE" -k ~/Library/Keychains/login.keychain-db -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           
-          # 设置钥匙串
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CERT_PASSWORD" ~/Library/Keychains/login.keychain-db || true
           
-          # 显示导入后的证书
           echo "=== Certificates after import ==="
           security find-identity -v -p codesigning
           
-          # 检查描述文件
           echo "=== Provisioning profiles ==="
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read f; do
             echo "Found profile: $f"
-            cp "$f" ~/Library/MobileDevice/Provisioning\ Profiles/
+            TARGET="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
+            if [ ! -f "$TARGET" ]; then
+              cp "$f" "$TARGET"
+              echo "Copied to: $TARGET"
+            else
+              echo "Already exists: $TARGET"
+            fi
           done
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
@@ -128,21 +121,15 @@ workflows:
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
           echo "Using scheme: $SCHEME_NAME"
           
-          # 再次验证证书
           echo "=== Certificates before build ==="
           security find-identity -v -p codesigning
           
-          # 复制 exportOptions.plist
           if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
             cp "$CM_BUILD_DIR/exportOptions.plist" ./
-          else
-            echo "WARNING: exportOptions.plist not found"
           fi
           
-          # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
-          # 创建 archive
           mkdir -p "$CM_BUILD_DIR/build"
           xcodebuild archive \
             -project "$(basename "$PROJECT_PATH")" \
@@ -150,14 +137,13 @@ workflows:
             -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
             -configuration Release \
             -sdk iphoneos \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_IDENTITY="Apple Distribution: Smith T (3K3Y88J6DX)" \
             CODE_SIGN_STYLE="Manual" \
             PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
             DEVELOPMENT_TEAM="3K3Y88J6DX" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES
           
-          # 导出 IPA
           if [ -f "exportOptions.plist" ]; then
             xcodebuild -exportArchive \
               -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \

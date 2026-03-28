@@ -10,10 +10,10 @@ workflows:
     environment:
       ios_signing:
         distribution_type: ad_hoc
-        bundle_identifier: com.baiyu.ministar
+        bundle_identifier: app.kiwi4193.andromeda2796
       vars:
         APP_NAME: "MiniStar"
-        BUNDLE_ID: "com.baiyu.ministar"
+        BUNDLE_ID: "app.kiwi4193.andromeda2796"
         TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
         TAURI_SRC_DIR: "$CM_BUILD_DIR/mobile/tauri/src-tauri"
         APP_STORE_CONNECT_INTEGRATION: "CM_APP_STORE_CONNECT"

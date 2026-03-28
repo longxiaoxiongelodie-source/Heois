@@ -83,15 +83,23 @@ workflows:
           
           echo "iOS project generated"
 
-      - name: Fix Bundle ID
+      - name: Fix Bundle ID and remove Build Rust Code script
         script: |
           cd "$TAURI_APP_DIR"
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
-            echo "Fixing Bundle ID in $PROJECT_PATH"
-            # 使用 perl 更精确地替换
-            perl -pi -e 's/com\.baiyu\.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
-            echo "Bundle ID fixed"
+            PBXPROJ="$PROJECT_PATH/project.pbxproj"
+            
+            echo "Fixing Bundle ID..."
+            perl -pi -e 's/com\.baiyu\.ministar/app.kiwi4193.andromeda2796/g' "$PBXPROJ"
+            
+            echo "Removing Build Rust Code script..."
+            # 删除所有包含 "Build Rust Code" 的行
+            perl -ni -e 'print unless /Build Rust Code/' "$PBXPROJ"
+            # 删除所有包含 Script- 且与脚本相关的行（清理残留）
+            perl -ni -e 'print unless /Script-[A-F0-9]{24}\.sh/' "$PBXPROJ"
+            
+            echo "Done"
           fi
 
       - name: Build IPA

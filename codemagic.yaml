@@ -20,6 +20,7 @@ workflows:
       cache_paths:
         - $HOME/.cargo/registry
         - $HOME/.cargo/git
+        - $HOME/.rustup
         - $HOME/Library/Caches/CocoaPods
         - $CM_BUILD_DIR/mobile/tauri/node_modules
 
@@ -30,56 +31,105 @@ workflows:
           uname -a
           sw_vers
           xcodebuild -version
-          rustc --version || true
-          cargo --version || true
           node --version
           npm --version
+          echo "Checking directory structure..."
+          ls -la "$CM_BUILD_DIR/mobile/tauri" || echo "Directory not found"
+
+      - name: Install Rust
+        script: |
+          set -euxo pipefail
+          if ! command -v rustc &> /dev/null; then
+            echo "Rust not found, installing..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          else
+            echo "Rust already installed"
+          fi
+          source "$HOME/.cargo/env"
+          rustc --version
+          cargo --version
+          rustup --version
+
+      - name: Install Rust iOS targets
+        script: |
+          set -euxo pipefail
+          source "$HOME/.cargo/env"
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
       - name: Install frontend dependencies
         script: |
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
-          npm ci || npm install
-
-      - name: Install Rust iOS targets
-        script: |
-          set -euxo pipefail
-          rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+          echo "Current directory: $(pwd)"
+          echo "Files in directory:"
+          ls -la
+          
+          if [ ! -f "package.json" ]; then
+            echo "ERROR: package.json not found in $(pwd)"
+            exit 1
+          fi
+          
+          if [ -f "package-lock.json" ]; then
+            echo "Found package-lock.json, using npm ci"
+            npm ci
+          else
+            echo "No package-lock.json found, using npm install"
+            npm install
+          fi
 
       - name: Generate Tauri iOS project
         script: |
           set -euxo pipefail
+          source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
+          
           if [ ! -d src-tauri/gen/apple ]; then
+            echo "Initializing Tauri iOS project..."
             npx tauri ios init
+          else
+            echo "Tauri iOS project already exists"
           fi
+          
+          echo "Found Xcode projects:"
           find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
 
       - name: Apply provisioning profiles
         script: |
           set -euxo pipefail
+          source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
+          
           PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
           if [ -z "$PROJECT_PATH" ]; then
-            echo "No Xcode project found under src-tauri/gen/apple"
+            echo "ERROR: No Xcode project found under src-tauri/gen/apple"
             exit 1
           fi
+          
+          echo "Using project: $PROJECT_PATH"
           keychain initialize
-          # 使用你在环境变量中配置的证书和描述文件
           xcode-project use-profiles --project "$PROJECT_PATH"
 
       - name: Build signed IPA
         script: |
           set -euxo pipefail
+          source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
-          # 使用 ad_hoc 方式导出，而不是 app-store-connect
+          
+          echo "Building iOS app with ad-hoc export method..."
           npx tauri ios build --export-method ad-hoc
+          
+          echo "Build completed, checking for IPA..."
+          find src-tauri/gen/apple/build -name "*.ipa" -print || echo "No IPA found yet"
 
       - name: List generated artifacts
         script: |
           set -euxo pipefail
+          echo "Searching for generated artifacts..."
           find "$TAURI_SRC_DIR/gen/apple/build" -maxdepth 4 \( -name "*.ipa" -o -name "*.app" -o -name "*.dSYM" -o -name "*.dSYM.zip" \) -print || true
+          echo "Also checking DerivedData..."
+          find "$HOME/Library/Developer/Xcode/DerivedData" -name "*.ipa" -print 2>/dev/null || true
 
     artifacts:
       - mobile/tauri/src-tauri/gen/apple/build/**/*.ipa
       - mobile/tauri/src-tauri/gen/apple/build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa

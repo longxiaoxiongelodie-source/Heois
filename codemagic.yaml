@@ -83,27 +83,28 @@ workflows:
           
           echo "iOS project generated"
 
-      - name: Fix Bundle ID safely
+      - name: Fix Bundle ID and remove Build Rust Code script
         script: |
           cd "$TAURI_APP_DIR"
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
             PBXPROJ="$PROJECT_PATH/project.pbxproj"
             
-            echo "=== Original Bundle ID values ==="
-            grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5
-            
             echo "=== Fixing Bundle ID ==="
-            # 使用 sed 精确替换
             sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.baiyu.ministar;/PRODUCT_BUNDLE_IDENTIFIER = app.kiwi4193.andromeda2796;/g' "$PBXPROJ"
             
-            echo "=== Fixed Bundle ID values ==="
-            grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" | head -5
+            echo "=== Removing Build Rust Code script ==="
+            # 删除所有包含 "Build Rust Code" 的行
+            sed -i '' '/Build Rust Code/d' "$PBXPROJ"
+            # 删除所有包含 "Script-" 的行（脚本引用）
+            sed -i '' '/Script-[A-F0-9]\{24\}.sh/d' "$PBXPROJ"
+            # 删除空的 shellScript 行
+            sed -i '' '/shellScript = "";/d' "$PBXPROJ"
             
             # 也修改 Info.plist
             find src-tauri/gen/apple -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "app.kiwi4193.andromeda2796" {} \; 2>/dev/null || true
             
-            echo "Bundle ID fixed"
+            echo "Done"
           fi
 
       - name: Build IPA

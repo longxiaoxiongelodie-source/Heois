@@ -11,43 +11,10 @@ workflows:
       vars:
         BUNDLE_ID: "app.kiwi4193.andromeda2796"
         TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
-        CERT_PASSWORD: "1"
       xcode: latest
       node: 22.22.2
 
     scripts:
-      - name: Find and import certificate
-        script: |
-          set -euxo pipefail
-          
-          echo "=== Searching for certificate files ==="
-          # 搜索整个系统找 .p12 文件
-          find /Users/builder -name "*.p12" -type f 2>/dev/null | while read file; do
-            echo "Found: $file"
-          done
-          
-          # 查找第一个 .p12 文件
-          CERT_FILE=$(find /Users/builder -name "*.p12" -type f 2>/dev/null | head -n 1)
-          
-          if [ -z "$CERT_FILE" ]; then
-            echo "ERROR: No .p12 certificate file found"
-            echo "Searching in all locations..."
-            find / -name "*.p12" -type f 2>/dev/null | head -10 || echo "No files found"
-            exit 1
-          fi
-          
-          echo "Using certificate: $CERT_FILE"
-          
-          # 导入证书到钥匙串
-          security import "$CERT_FILE" -k ~/Library/Keychains/login.keychain-db -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
-          
-          # 设置钥匙串
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CERT_PASSWORD" ~/Library/Keychains/login.keychain-db || true
-          
-          # 验证证书
-          echo "=== Imported certificates ==="
-          security find-identity -v -p codesigning
-
       - name: Install Rust
         script: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -62,7 +29,7 @@ workflows:
       - name: Build frontend
         script: |
           cd "$TAURI_APP_DIR"
-          npm run build || echo "Build script not found"
+          npm run build || echo "No build script"
 
       - name: Generate iOS project
         script: |
@@ -77,67 +44,24 @@ workflows:
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
             sed -i '' 's/com.baiyu.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
-            echo "Bundle ID fixed"
           fi
 
-      - name: Apply provisioning profiles
-        script: |
-          cd "$TAURI_APP_DIR"
-          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -n "$PROJECT_PATH" ]; then
-            keychain initialize
-            xcode-project use-profiles --project "$PROJECT_PATH"
-          fi
-
-      - name: Build IPA
+      - name: Build IPA with Codemagic signing
         script: |
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
           
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "ERROR: No Xcode project found"
-            exit 1
-          fi
-          
           PROJECT_DIR=$(dirname "$PROJECT_PATH")
           cd "$PROJECT_DIR"
           
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
-          echo "Using scheme: $SCHEME_NAME"
           
-          # 再次验证证书
-          echo "=== Certificates before build ==="
-          security find-identity -v -p codesigning
-          
-          # 清理
-          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
-          
-          # 构建 archive
-          mkdir -p "$CM_BUILD_DIR/build"
-          xcodebuild archive \
-            -project "$(basename "$PROJECT_PATH")" \
-            -scheme "$SCHEME_NAME" \
-            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            CODE_SIGN_STYLE="Manual" \
-            PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
-            DEVELOPMENT_TEAM="3K3Y88J6DX"
-          
-          # 导出 IPA
-          if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
-            cp "$CM_BUILD_DIR/exportOptions.plist" ./
-            xcodebuild -exportArchive \
-              -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
-              -exportPath "$CM_BUILD_DIR/build/ipa" \
-              -exportOptionsPlist exportOptions.plist
-          else
-            echo "exportOptions.plist not found, skipping export"
-          fi
-          
-          echo "Build completed"
+          # 让 Codemagic 自动处理签名
+          xcode-project build-ipa \
+            --project "$(basename "$PROJECT_PATH")" \
+            --scheme "$SCHEME_NAME"
 
     artifacts:
-      - build/ipa/*.ipa
+      - build/ios/ipa/*.ipa
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa

@@ -1,0 +1,111 @@
+workflows:
+  ministar_ios_testflight:
+    name: MiniStar iOS TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: CM_APP_STORE_CONNECT
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.baiyu.ministar
+      vars:
+        APP_NAME: "MiniStar"
+        BUNDLE_ID: "com.baiyu.ministar"
+        TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
+        TAURI_SRC_DIR: "$CM_BUILD_DIR/mobile/tauri/src-tauri"
+        APP_STORE_CONNECT_INTEGRATION: "CM_APP_STORE_CONNECT"
+      xcode: latest
+      node: 22.22.2
+
+    cache:
+      cache_paths:
+        - $HOME/.cargo/registry
+        - $HOME/.cargo/git
+        - $HOME/Library/Caches/CocoaPods
+        - $CM_BUILD_DIR/mobile/tauri/node_modules
+
+    scripts:
+      - name: Show build context
+        script: |
+          set -euxo pipefail
+          uname -a
+          sw_vers
+          xcodebuild -version
+          rustc --version || true
+          cargo --version || true
+          node --version
+          npm --version
+
+      - name: Install frontend dependencies
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          npm ci || npm install
+
+      - name: Install Rust iOS targets
+        script: |
+          set -euxo pipefail
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+
+      - name: Generate Tauri iOS project
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          if [ ! -d src-tauri/gen/apple ]; then
+            npx tauri ios init
+          fi
+          find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+
+      - name: Fetch signing files from App Store Connect
+        script: |
+          set -euxo pipefail
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+
+      - name: Apply provisioning profiles
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "No Xcode project found under src-tauri/gen/apple"
+            exit 1
+          fi
+          keychain initialize
+          xcode-project use-profiles --project "$PROJECT_PATH"
+
+      - name: Build signed IPA with Tauri
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          npx tauri ios build --export-method app-store-connect
+
+      - name: List generated artifacts
+        script: |
+          set -euxo pipefail
+          find "$TAURI_SRC_DIR/gen/apple/build" -maxdepth 4 \( -name "*.ipa" -o -name "*.app" -o -name "*.dSYM" -o -name "*.dSYM.zip" \) -print || true
+
+    artifacts:
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.ipa
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.dSYM
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.dSYM.zip
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - MiniStar Internal
+
+# Notes for this draft:
+# 1. In Codemagic, create an App Store Connect integration named `CM_APP_STORE_CONNECT`.
+# 2. Also create a TestFlight beta group named `MiniStar Internal`, or change the name above.
+# 3. This workflow only covers packaging and signing.
+#    MiniStar currently connects to the backend host derived from runtime location,
+#    so a packaged iPhone app still needs a proper remote-backend address strategy.
+# 4. If `npx tauri ios build --export-method app-store-connect` differs on your Tauri/Codemagic image,
+#    keep this file as the base draft and adjust only that one build command first.

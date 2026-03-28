@@ -36,6 +36,29 @@ workflows:
           echo "Checking directory structure..."
           ls -la "$CM_BUILD_DIR/mobile/tauri" || echo "Directory not found"
 
+      - name: Find where Codemagic stores certificates
+        script: |
+          set -euxo pipefail
+          echo "=== Searching for .p12 certificate files ==="
+          # 搜索常见的证书存放位置
+          echo "Searching in /Users/builder/Library/MobileDevice/"
+          ls -la /Users/builder/Library/MobileDevice/ 2>/dev/null || echo "Not found"
+          
+          echo "Searching in /Users/builder/Library/Keychains/"
+          ls -la /Users/builder/Library/Keychains/ 2>/dev/null || echo "Not found"
+          
+          echo "Searching in /tmp/"
+          ls -la /tmp/ | grep -i p12 2>/dev/null || echo "No p12 in /tmp"
+          
+          echo "Searching in /Users/builder/clone/"
+          find /Users/builder/clone -name "*.p12" 2>/dev/null || echo "No p12 in clone"
+          
+          echo "Searching in /Users/builder/"
+          find /Users/builder -name "*.p12" -type f 2>/dev/null | head -20 || echo "No p12 files found"
+          
+          echo "=== Searching for .mobileprovision files ==="
+          find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | head -20 || echo "No profiles found"
+
       - name: Install Rust
         script: |
           set -euxo pipefail
@@ -125,7 +148,35 @@ workflows:
           
           echo "Bundle ID fixed"
 
-      - name: Build signed IPA with Codemagic auto-signing
+      - name: Apply provisioning profiles
+        script: |
+          set -euxo pipefail
+          source "$HOME/.cargo/env"
+          cd "$TAURI_APP_DIR"
+          
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: No Xcode project found under src-tauri/gen/apple"
+            exit 1
+          fi
+          
+          echo "Using project: $PROJECT_PATH"
+          
+          # 确保描述文件目录存在
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          
+          # 列出已安装的描述文件
+          echo "Installed provisioning profiles:"
+          ls -la "$PROFILES_DIR/" || echo "No profiles found"
+          
+          # 初始化 keychain
+          keychain initialize
+          
+          # 使用 xcode-project 应用描述文件
+          xcode-project use-profiles --project "$PROJECT_PATH"
+
+      - name: Build signed IPA
         script: |
           set -euxo pipefail
           source "$HOME/.cargo/env"
@@ -151,26 +202,46 @@ workflows:
           # 复制 exportOptions.plist 到当前目录
           cp "$CM_BUILD_DIR/exportOptions.plist" ./
           
-          # 使用 Codemagic 的自动签名命令
-          echo "Building with xcode-project build-ipa..."
-          xcode-project build-ipa \
-            --project "$(basename "$PROJECT_PATH")" \
-            --scheme "$SCHEME_NAME"
+          # 查看可用的证书和描述文件
+          echo "Available signing identities:"
+          security find-identity -v -p codesigning
+          
+          echo "Available provisioning profiles:"
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+          
+          # 清理
+          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
+          
+          # 构建 archive
+          mkdir -p "$CM_BUILD_DIR/build"
+          xcodebuild archive \
+            -project "$(basename "$PROJECT_PATH")" \
+            -scheme "$SCHEME_NAME" \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_STYLE="Manual" \
+            PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
+            DEVELOPMENT_TEAM="3K3Y88J6DX" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES
+          
+          # 导出 IPA
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ipa" \
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates
           
           echo "Build completed"
-          
-          # 查找生成的 IPA
-          echo "Looking for IPA files..."
-          find "$CM_BUILD_DIR" -name "*.ipa" -print 2>/dev/null || true
+          ls -la "$CM_BUILD_DIR/build/ipa/"
 
       - name: List generated artifacts
         script: |
           set -euxo pipefail
           echo "Searching for generated artifacts..."
-          find "$CM_BUILD_DIR" -name "*.ipa" -print 2>/dev/null || true
-          find "$HOME/Library/Developer/Xcode/DerivedData" -name "*.ipa" -print 2>/dev/null || true
+          find "$CM_BUILD_DIR/build" -name "*.ipa" -print || true
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.ipa
-      - **/*.ipa
+      - build/ipa/*.ipa

@@ -121,6 +121,22 @@ workflows:
           
           keychain initialize
           xcode-project use-profiles --project "$PROJECT_PATH"
+          
+          # 验证描述文件是否安装成功
+          echo "Verifying provisioning profiles installed..."
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
+          
+          echo "Checking for profile matching Bundle ID: $BUNDLE_ID"
+          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            if [ -f "$profile" ]; then
+              PROFILE_BUNDLE=$(security cms -D -i "$profile" 2>/dev/null | grep -A1 "application-identifier" | grep "$BUNDLE_ID" || echo "")
+              if [ -n "$PROFILE_BUNDLE" ]; then
+                echo "Found matching profile: $(basename "$profile")"
+                echo "Profile details:"
+                security cms -D -i "$profile" 2>/dev/null | grep -E "Name|TeamIdentifier|application-identifier" | head -10
+              fi
+            fi
+          done
 
       - name: Build signed IPA
         script: |

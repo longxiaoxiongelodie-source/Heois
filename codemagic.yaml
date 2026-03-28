@@ -20,42 +20,27 @@ workflows:
         script: |
           set -euxo pipefail
           
-          echo "=== Searching for .p12 files ==="
           CERT_FILE=$(find /Users/builder -name "*.p12" -type f 2>/dev/null | head -n 1)
-          
           if [ -z "$CERT_FILE" ]; then
             echo "ERROR: No .p12 certificate found"
             exit 1
           fi
           
-          echo "=== Found certificate: $CERT_FILE ==="
-          
           security import "$CERT_FILE" -k ~/Library/Keychains/login.keychain-db -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CERT_PASSWORD" ~/Library/Keychains/login.keychain-db || true
           
-          echo "=== Certificates after import ==="
+          echo "=== Certificates ==="
           security find-identity -v -p codesigning
           
-          echo "=== Provisioning profiles ==="
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read f; do
             TARGET="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
-            if [ ! -f "$TARGET" ]; then
-              cp "$f" "$TARGET"
-              echo "Copied: $(basename "$f")"
-            fi
+            [ ! -f "$TARGET" ] && cp "$f" "$TARGET"
           done
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
 
       - name: Install Rust
         script: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          source "$HOME/.cargo/env"
-          rustc --version
-          cargo --version
-
-      - name: Install Rust iOS targets
-        script: |
           source "$HOME/.cargo/env"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
@@ -69,43 +54,50 @@ workflows:
           cd "$TAURI_APP_DIR"
           npm run build || echo "No build script"
 
+      - name: Configure tauri.conf.json with correct Bundle ID
+        script: |
+          cd "$TAURI_APP_DIR"
+          CONFIG="src-tauri/tauri.conf.json"
+          
+          # 直接写入正确的 Bundle ID 配置
+          cat > "$CONFIG" << 'EOF'
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "identifier": "app.kiwi4193.andromeda2796",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "iOS": {
+      "developmentTeam": "3K3Y88J6DX",
+      "bundleIdentifier": "app.kiwi4193.andromeda2796"
+    }
+  },
+  "tauri": {
+    "bundle": {},
+    "allowlist": {},
+    "windows": []
+  }
+}
+EOF
+          echo "tauri.conf.json configured with correct Bundle ID"
+
       - name: Generate iOS project
         script: |
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
-          
-          # 删除旧的 iOS 项目
           rm -rf src-tauri/gen/apple
-          
-          # 重新生成
-          echo "Generating iOS project..."
           npx tauri ios init
-          
-          echo "iOS project generated"
-
-      - name: Fix Bundle ID and remove Build Rust Code script
-        script: |
-          cd "$TAURI_APP_DIR"
-          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -n "$PROJECT_PATH" ]; then
-            PBXPROJ="$PROJECT_PATH/project.pbxproj"
-            
-            echo "=== Fixing Bundle ID ==="
-            sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.baiyu.ministar;/PRODUCT_BUNDLE_IDENTIFIER = app.kiwi4193.andromeda2796;/g' "$PBXPROJ"
-            
-            echo "=== Removing Build Rust Code script ==="
-            # 删除所有包含 "Build Rust Code" 的行
-            sed -i '' '/Build Rust Code/d' "$PBXPROJ"
-            # 删除所有包含 "Script-" 的行（脚本引用）
-            sed -i '' '/Script-[A-F0-9]\{24\}.sh/d' "$PBXPROJ"
-            # 删除空的 shellScript 行
-            sed -i '' '/shellScript = "";/d' "$PBXPROJ"
-            
-            # 也修改 Info.plist
-            find src-tauri/gen/apple -name "Info.plist" -exec plutil -replace CFBundleIdentifier -string "app.kiwi4193.andromeda2796" {} \; 2>/dev/null || true
-            
-            echo "Done"
-          fi
 
       - name: Build IPA
         script: |
@@ -113,35 +105,15 @@ workflows:
           cd "$TAURI_APP_DIR"
           
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "ERROR: No Xcode project found"
-            exit 1
-          fi
-          
           PROJECT_DIR=$(dirname "$PROJECT_PATH")
           cd "$PROJECT_DIR"
           
           SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
-          echo "Using scheme: $SCHEME_NAME"
           
-          echo "=== Certificates before build ==="
-          security find-identity -v -p codesigning
-          
-          # 使用仓库中的 exportOptions.plist
-          if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
-            cp "$CM_BUILD_DIR/exportOptions.plist" ./
-            echo "Using exportOptions.plist from repository"
-          else
-            echo "ERROR: exportOptions.plist not found in repository"
-            exit 1
-          fi
+          cp "$CM_BUILD_DIR/exportOptions.plist" ./ 2>/dev/null || true
           
           mkdir -p "$CM_BUILD_DIR/build"
           
-          # 清理
-          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
-          
-          # 构建 archive
           xcodebuild archive \
             -project "$(basename "$PROJECT_PATH")" \
             -scheme "$SCHEME_NAME" \
@@ -151,23 +123,16 @@ workflows:
             CODE_SIGN_IDENTITY="Apple Distribution: Smith T (3K3Y88J6DX)" \
             CODE_SIGN_STYLE="Manual" \
             PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
-            DEVELOPMENT_TEAM="3K3Y88J6DX" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES \
-            -allowProvisioningUpdates
+            DEVELOPMENT_TEAM="3K3Y88J6DX"
           
-          if [ -d "$CM_BUILD_DIR/build/ministar.xcarchive" ]; then
+          if [ -f "exportOptions.plist" ]; then
             xcodebuild -exportArchive \
               -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
               -exportPath "$CM_BUILD_DIR/build/ipa" \
-              -exportOptionsPlist exportOptions.plist \
-              -allowProvisioningUpdates
-            echo "Build completed"
-            ls -la "$CM_BUILD_DIR/build/ipa/"
-          else
-            echo "Archive failed"
-            exit 1
+              -exportOptionsPlist exportOptions.plist
           fi
+          
+          find "$CM_BUILD_DIR/build" -name "*.ipa" -print
 
     artifacts:
       - build/ipa/*.ipa

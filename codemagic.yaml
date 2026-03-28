@@ -69,38 +69,19 @@ workflows:
           cd "$TAURI_APP_DIR"
           npm run build || echo "No build script"
 
-      - name: Generate fresh iOS project
+      - name: Generate iOS project
         script: |
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           
-          # 删除旧的 iOS 项目
+          # 删除旧的 iOS 项目（如果存在）
           rm -rf src-tauri/gen/apple
           
           # 重新生成
-          echo "Generating fresh iOS project..."
+          echo "Generating iOS project..."
           npx tauri ios init
           
           echo "iOS project generated"
-
-      - name: Fix Bundle ID and remove Build Rust Code script
-        script: |
-          cd "$TAURI_APP_DIR"
-          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -n "$PROJECT_PATH" ]; then
-            PBXPROJ="$PROJECT_PATH/project.pbxproj"
-            
-            echo "Fixing Bundle ID..."
-            perl -pi -e 's/com\.baiyu\.ministar/app.kiwi4193.andromeda2796/g' "$PBXPROJ"
-            
-            echo "Removing Build Rust Code script..."
-            # 删除所有包含 "Build Rust Code" 的行
-            perl -ni -e 'print unless /Build Rust Code/' "$PBXPROJ"
-            # 删除所有包含 Script- 且与脚本相关的行（清理残留）
-            perl -ni -e 'print unless /Script-[A-F0-9]{24}\.sh/' "$PBXPROJ"
-            
-            echo "Done"
-          fi
 
       - name: Build IPA
         script: |
@@ -132,6 +113,11 @@ workflows:
           fi
           
           mkdir -p "$CM_BUILD_DIR/build"
+          
+          # 先尝试清理
+          xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
+          
+          # 构建 archive
           xcodebuild archive \
             -project "$(basename "$PROJECT_PATH")" \
             -scheme "$SCHEME_NAME" \
@@ -143,7 +129,8 @@ workflows:
             PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
             DEVELOPMENT_TEAM="3K3Y88J6DX" \
             CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES
+            CODE_SIGNING_ALLOWED=YES \
+            -allowProvisioningUpdates
           
           if [ -d "$CM_BUILD_DIR/build/ministar.xcarchive" ]; then
             xcodebuild -exportArchive \

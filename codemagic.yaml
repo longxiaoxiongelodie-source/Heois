@@ -13,6 +13,7 @@ workflows:
         BUNDLE_ID: "app.kiwi4193.andromeda2796"
         TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
         TAURI_SRC_DIR: "$CM_BUILD_DIR/mobile/tauri/src-tauri"
+        APPLE_DEVELOPMENT_TEAM: "3K3Y88J6DX"
       xcode: latest
       node: 22.22.2
 
@@ -150,16 +151,6 @@ workflows:
           # 清理
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           
-          # 从描述文件中提取 Team ID
-          echo "Extracting Team ID from provisioning profile..."
-          TEAM_ID=$(security cms -D -i ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | plutil -extract TeamIdentifier.0 raw -o - - 2>/dev/null || echo "")
-          
-          if [ -z "$TEAM_ID" ]; then
-            echo "Warning: Could not extract Team ID, using placeholder"
-            TEAM_ID="AAAAAAAAAA"
-          fi
-          echo "Using Team ID: $TEAM_ID"
-          
           # 构建 archive
           mkdir -p "$CM_BUILD_DIR/build"
           xcodebuild archive \
@@ -171,7 +162,7 @@ workflows:
             CODE_SIGN_IDENTITY="iPhone Distribution" \
             CODE_SIGN_STYLE="Manual" \
             PROVISIONING_PROFILE_SPECIFIER="$BUNDLE_ID" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
+            DEVELOPMENT_TEAM="$APPLE_DEVELOPMENT_TEAM" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES
           

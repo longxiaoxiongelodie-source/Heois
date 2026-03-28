@@ -42,6 +42,7 @@ workflows:
             TARGET="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
             if [ ! -f "$TARGET" ]; then
               cp "$f" "$TARGET"
+              echo "Copied: $(basename "$f")"
             fi
           done
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
@@ -83,6 +84,7 @@ workflows:
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
             sed -i '' 's/com.baiyu.ministar/app.kiwi4193.andromeda2796/g' "$PROJECT_PATH/project.pbxproj"
+            echo "Bundle ID fixed"
           fi
 
       - name: Remove Build Rust Code script
@@ -91,19 +93,9 @@ workflows:
           PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
           if [ -n "$PROJECT_PATH" ]; then
             echo "Removing Build Rust Code script from project..."
-            # 删除脚本引用
             sed -i '' '/Build Rust Code/d' "$PROJECT_PATH/project.pbxproj"
-            sed -i '' '/Script-282FF74DD5E2DDCF9F386825/d' "$PROJECT_PATH/project.pbxproj"
+            sed -i '' '/Script-[0-9A-F]*\.sh/d' "$PROJECT_PATH/project.pbxproj"
             echo "Script removed"
-          fi
-
-      - name: Apply provisioning profiles
-        script: |
-          cd "$TAURI_APP_DIR"
-          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          if [ -n "$PROJECT_PATH" ]; then
-            keychain initialize
-            xcode-project use-profiles --project "$PROJECT_PATH"
           fi
 
       - name: Build IPA
@@ -128,6 +120,23 @@ workflows:
           
           if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
             cp "$CM_BUILD_DIR/exportOptions.plist" ./
+          else
+            echo "WARNING: exportOptions.plist not found, creating default..."
+            cat > exportOptions.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>ad-hoc</string>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>app.kiwi4193.andromeda2796</key>
+        <string>f708b7ef-a0b5-4dd8-a233-3b7d78519e1f</string>
+    </dict>
+</dict>
+</plist>
+EOF
           fi
           
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
@@ -146,16 +155,19 @@ workflows:
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES
           
-          if [ -f "exportOptions.plist" ]; then
+          if [ -d "$CM_BUILD_DIR/build/ministar.xcarchive" ]; then
             xcodebuild -exportArchive \
               -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
               -exportPath "$CM_BUILD_DIR/build/ipa" \
               -exportOptionsPlist exportOptions.plist \
               -allowProvisioningUpdates
+            echo "Build completed"
+            ls -la "$CM_BUILD_DIR/build/ipa/"
+          else
+            echo "Archive failed, showing last 50 lines of build log:"
+            tail -50 ~/Library/Logs/DiagnosticReports/* 2>/dev/null || echo "No logs found"
+            exit 1
           fi
-          
-          echo "Build completed"
-          find "$CM_BUILD_DIR/build" -name "*.ipa" -print
 
     artifacts:
       - build/ipa/*.ipa

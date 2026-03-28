@@ -118,22 +118,14 @@ workflows:
           echo "=== Certificates before build ==="
           security find-identity -v -p codesigning
           
-          # 创建 exportOptions.plist
-          cat > exportOptions.plist << 'PLISTEOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key>
-    <string>ad-hoc</string>
-    <key>provisioningProfiles</key>
-    <dict>
-        <key>app.kiwi4193.andromeda2796</key>
-        <string>f708b7ef-a0b5-4dd8-a233-3b7d78519e1f</string>
-    </dict>
-</dict>
-</plist>
-PLISTEOF
+          # 使用仓库中的 exportOptions.plist
+          if [ -f "$CM_BUILD_DIR/exportOptions.plist" ]; then
+            cp "$CM_BUILD_DIR/exportOptions.plist" ./
+            echo "Using exportOptions.plist from repository"
+          else
+            echo "ERROR: exportOptions.plist not found in repository"
+            exit 1
+          fi
           
           xcodebuild clean -project "$(basename "$PROJECT_PATH")" -scheme "$SCHEME_NAME" || true
           

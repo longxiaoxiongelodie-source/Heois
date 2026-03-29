@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:ios:init": "tauri ios init",
     "tauri:ios:dev": "tauri ios dev",

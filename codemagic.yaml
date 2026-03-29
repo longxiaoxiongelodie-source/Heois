@@ -94,21 +94,23 @@ workflows:
           npx tauri ios init
           find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
 
-      - name: Apply provisioning profiles
+      - name: Locate manual signing assets
         script: |
           set -euxo pipefail
-          cd "$TAURI_APP_DIR"
-          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
-          if [ -z "$PROJECT_PATH" ]; then
-            echo "No Xcode project found under src-tauri/gen/apple"
+          CERT_FILE="$(find /Users/builder -name '*.p12' -type f 2>/dev/null | head -n 1)"
+          PROFILE_FILE="$(find /Users/builder -name '*.mobileprovision' -type f 2>/dev/null | head -n 1)"
+          if [ -z "$CERT_FILE" ]; then
+            echo "No .p12 certificate found"
             exit 1
           fi
-          xcode-project use-profiles \
-            --project "$PROJECT_PATH" \
-            --profile "$HOME/Library/MobileDevice/Provisioning Profiles/*.mobileprovision" \
-            --archive-method ad-hoc \
-            --custom-export-options='{"provisioningProfiles":{"app.kiwi4193.andromeda2796":"app.kiwi4193.andromeda2796"}}' \
-            --export-options-plist "$CM_BUILD_DIR/exportOptions.plist"
+          if [ -z "$PROFILE_FILE" ]; then
+            echo "No .mobileprovision profile found"
+            exit 1
+          fi
+          printf 'CERT_FILE=%s\n' "$CERT_FILE" >> "$CM_ENV"
+          printf 'PROFILE_FILE=%s\n' "$PROFILE_FILE" >> "$CM_ENV"
+          echo "Using certificate: $CERT_FILE"
+          echo "Using profile: $PROFILE_FILE"
 
       - name: Build signed IPA
         script: |
@@ -118,6 +120,9 @@ workflows:
           export DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           export APPLE_DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           export RUST_BACKTRACE=1
+          export IOS_CERTIFICATE="$(base64 "$CERT_FILE" | tr -d '\n')"
+          export IOS_CERTIFICATE_PASSWORD="$CERT_PASSWORD"
+          export IOS_MOBILE_PROVISION="$(base64 "$PROFILE_FILE" | tr -d '\n')"
           npx tauri ios build --export-method release-testing
 
       - name: List generated artifacts

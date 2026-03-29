@@ -120,9 +120,9 @@ workflows:
           export DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           export APPLE_DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           export RUST_BACKTRACE=1
-          export IOS_CERTIFICATE="$(base64 "$CERT_FILE" | tr -d '\n')"
+          export IOS_CERTIFICATE="$(base64 -i "$CERT_FILE" | tr -d '\n')"
           export IOS_CERTIFICATE_PASSWORD="$CERT_PASSWORD"
-          export IOS_MOBILE_PROVISION="$(base64 "$PROFILE_FILE" | tr -d '\n')"
+          export IOS_MOBILE_PROVISION="$(base64 -i "$PROFILE_FILE" | tr -d '\n')"
           npx tauri ios build --export-method release-testing
 
       - name: List generated artifacts

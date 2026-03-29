@@ -31,7 +31,7 @@
 
       <div class="mobile-picker-foot">
         <button id="mobile-user-btn" class="mobile-foot-btn">
-          <span class="mobile-avatar-dot"></span>
+          <span id="mobile-user-avatar" class="mobile-avatar-dot">ꕥ</span>
           <span id="mobile-user-label">用户</span>
         </button>
         <button id="mobile-new-chat-btn" class="mobile-foot-btn">新对话</button>
@@ -211,6 +211,37 @@
       </div>
     </div>
   </div>
+
+  <div id="mobile-user-sheet" class="mobile-sheet hidden">
+    <div class="mobile-sheet-backdrop"></div>
+    <div class="mobile-sheet-panel">
+      <div class="mobile-sheet-grabber"></div>
+      <div class="mobile-sheet-head">
+        <h3>用户资料</h3>
+        <button id="mobile-user-sheet-close" class="mobile-icon-btn">✕</button>
+      </div>
+      <div class="mobile-sheet-body">
+        <div class="mobile-user-profile-preview">
+          <span id="mobile-user-sheet-avatar" class="mobile-avatar-dot">ꕥ</span>
+          <div class="mobile-user-profile-copy">
+            <div class="mobile-model-title">当前显示</div>
+            <div id="mobile-user-sheet-sub" class="mobile-model-sub">用户</div>
+          </div>
+        </div>
+        <label class="mobile-backend-field">
+          <span class="mobile-model-title">用户名</span>
+          <input id="mobile-user-name-input" type="text" maxlength="24" placeholder="输入你的显示名字" />
+        </label>
+        <div class="mobile-sheet-actions">
+          <button id="mobile-user-avatar-pick-btn" class="mobile-sheet-primary">选择头像</button>
+          <button id="mobile-user-avatar-clear-btn" class="mobile-sheet-secondary">清空头像</button>
+          <button id="mobile-user-save-btn" class="mobile-sheet-primary">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input id="mobile-user-avatar-input" type="file" accept="image/*" hidden />
 
   <div id="mobile-toast"></div>
 

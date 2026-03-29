@@ -23,6 +23,7 @@ const mobileState = {
 let mobileTtsAudio = null;
 let mobileTtsActiveBtn = null;
 let mobileTtsObjectUrl = null;
+const MOBILE_SHEET_TRANSITION_MS = 240;
 
 function escHtml(text = '') {
   return String(text)
@@ -40,6 +41,15 @@ function showToast(message) {
   el.classList.add('show');
   window.clearTimeout(mobileState.toastTimer);
   mobileState.toastTimer = window.setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function getCurrentMessage() {
@@ -562,6 +572,7 @@ function renderPicker() {
     const folderConvs = (folder.conv_ids || [])
       .map(id => convs.find(conv => conv.id === id))
       .filter(Boolean)
+      .sort((a, b) => Number(b.updatedAt || b.id || 0) - Number(a.updatedAt || a.id || 0))
       .filter(conv => {
         if (!keyword) return true;
         return String(folder.name || '').toLowerCase().includes(keyword)
@@ -601,6 +612,7 @@ function renderPicker() {
 
   const looseConvs = convs
     .filter(conv => !groupedConvIds.has(conv.id))
+    .sort((a, b) => Number(b.updatedAt || b.id || 0) - Number(a.updatedAt || a.id || 0))
     .filter(conv => !keyword || String(conv.title || '').toLowerCase().includes(keyword));
   if (looseConvs.length) {
     const looseGroup = document.createElement('section');
@@ -689,25 +701,16 @@ function renderMapSheet() {
     return;
   }
 
-  const navItems = conv.messages
-    .map((msg, index) => ({ msg, index }))
-    .filter(item => item.msg.role === 'user');
-
-  const finalItems = navItems.length ? navItems : conv.messages.map((msg, index) => ({ msg, index }));
+  const finalItems = conv.messages.map((msg, index) => ({ msg, index }));
   finalItems.forEach(({ msg, index }) => {
     const btn = document.createElement('button');
     btn.className = 'mobile-map-item';
     const roleLabel = msg.role === 'user' ? '你' : '助手';
-    const chips = [
-      `<span class="mobile-map-chip">#${index + 1}</span>`,
-      `<span class="mobile-map-chip">${roleLabel}</span>`,
-    ].join('');
+    const summary = String(msg.content || '').replace(/\s+/g, ' ').trim().slice(0, 34) || `消息 ${index + 1}`;
     btn.innerHTML = `
       <div class="mobile-map-badge">${index + 1}</div>
       <div class="mobile-map-copy">
-        <div class="mobile-map-title">${escHtml((msg.content || '').slice(0, 28) || `消息 ${index + 1}`)}</div>
-        <div class="mobile-map-sub">定位到当前对话的第 ${index + 1} 条消息</div>
-        <div class="mobile-map-track">${chips}</div>
+        <div class="mobile-map-title">${escHtml(`${roleLabel} · ${summary}`)}</div>
       </div>
     `;
     btn.addEventListener('click', () => {
@@ -1156,6 +1159,49 @@ function updateSettingsSheet() {
   if (healthEl) healthEl.textContent = healthLabel;
 }
 
+function renderMobileUserIdentity() {
+  const name = String(mobileState.settings?.userName || '').trim() || '用户';
+  const avatarSrc = String(mobileState.settings?.userAvatar || '');
+  const label = document.getElementById('mobile-user-label');
+  const shellAvatar = document.getElementById('mobile-user-avatar');
+  const sheetAvatar = document.getElementById('mobile-user-sheet-avatar');
+  const sheetSub = document.getElementById('mobile-user-sheet-sub');
+  const nameInput = document.getElementById('mobile-user-name-input');
+  if (label) label.textContent = name;
+  if (sheetSub) sheetSub.textContent = name;
+  if (nameInput) nameInput.value = name;
+  [shellAvatar, sheetAvatar].forEach((el) => {
+    if (!el) return;
+    el.innerHTML = '';
+    if (avatarSrc && avatarSrc.startsWith('data:')) {
+      const img = document.createElement('img');
+      img.src = avatarSrc;
+      img.alt = name;
+      el.appendChild(img);
+    } else {
+      el.textContent = 'ꕥ';
+    }
+  });
+}
+
+function openUserSheet() {
+  renderMobileUserIdentity();
+  openSheet('mobile-user-sheet');
+}
+
+async function saveMobileUserProfile() {
+  try {
+    mobileState.settings.userName = (document.getElementById('mobile-user-name-input')?.value || '').trim();
+    await apiSaveSettings(mobileState.settings);
+    renderMobileUserIdentity();
+    renderMessages();
+    closeSheet('mobile-user-sheet');
+    showToast('用户资料已保存');
+  } catch (err) {
+    showToast(`保存失败：${err.message}`);
+  }
+}
+
 function updateBackendStatus(message = '', isError = false) {
   const el = document.getElementById('mobile-backend-status');
   if (!el) return;
@@ -1266,11 +1312,37 @@ function togglePicker() {
 }
 
 function openSheet(id) {
-  document.getElementById(id).classList.remove('hidden');
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  window.clearTimeout(sheet._closeTimer);
+  sheet.classList.remove('hidden');
+  requestAnimationFrame(() => sheet.classList.add('is-open'));
 }
 
 function closeSheet(id) {
-  document.getElementById(id).classList.add('hidden');
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  sheet.classList.remove('is-open');
+  window.clearTimeout(sheet._closeTimer);
+  sheet._closeTimer = window.setTimeout(() => sheet.classList.add('hidden'), MOBILE_SHEET_TRANSITION_MS);
+}
+
+function syncMobileViewport() {
+  const root = document.documentElement;
+  const viewport = window.visualViewport;
+  const body = document.body;
+  if (!root) return;
+  if (!viewport) {
+    root.style.setProperty('--mobile-vv-top', '0px');
+    root.style.setProperty('--mobile-kb-offset', '0px');
+    body?.classList.remove('keyboard-open');
+    return;
+  }
+  const top = Math.max(0, Math.round(viewport.offsetTop || 0));
+  const keyboardOffset = Math.max(0, Math.round((window.innerHeight || 0) - viewport.height - top));
+  root.style.setProperty('--mobile-vv-top', `${top}px`);
+  root.style.setProperty('--mobile-kb-offset', `${keyboardOffset}px`);
+  body?.classList.toggle('keyboard-open', keyboardOffset > 24);
 }
 
 function toggleFavoriteModel(providerId, modelName) {
@@ -1527,6 +1599,7 @@ async function loadInitialData() {
   renderMessages();
   renderPicker();
   updateSettingsSheet();
+  renderMobileUserIdentity();
   await loadModelCatalog();
 }
 
@@ -1562,12 +1635,14 @@ function bindEvents() {
   document.getElementById('mobile-history-sheet-close').addEventListener('click', () => closeSheet('mobile-history-sheet'));
   document.getElementById('mobile-settings-btn').addEventListener('click', () => openSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-sheet-close').addEventListener('click', () => closeSheet('mobile-settings-sheet'));
+  document.getElementById('mobile-user-btn').addEventListener('click', openUserSheet);
+  document.getElementById('mobile-user-sheet-close').addEventListener('click', () => closeSheet('mobile-user-sheet'));
   document.getElementById('mobile-settings-backend-trigger').addEventListener('click', () => openBackendSheet());
   document.getElementById('mobile-backend-sheet-close').addEventListener('click', () => closeSheet('mobile-backend-sheet'));
   document.getElementById('mobile-conv-actions-close').addEventListener('click', () => closeSheet('mobile-conv-actions-sheet'));
   document.getElementById('mobile-move-sheet-close').addEventListener('click', () => closeSheet('mobile-move-sheet'));
   document.getElementById('mobile-message-more-close').addEventListener('click', () => closeSheet('mobile-message-more-sheet'));
-  document.querySelectorAll('.mobile-sheet-backdrop').forEach(el => el.addEventListener('click', () => el.parentElement.classList.add('hidden')));
+  document.querySelectorAll('.mobile-sheet-backdrop').forEach(el => el.addEventListener('click', () => closeSheet(el.parentElement.id)));
   document.getElementById('mobile-send-btn').addEventListener('click', sendMessage);
   document.getElementById('mobile-extra-btn').addEventListener('click', () => {
     document.getElementById('mobile-extra-menu').classList.toggle('hidden');
@@ -1615,6 +1690,26 @@ function bindEvents() {
     } catch (err) {
       updateBackendStatus(err.message, true);
       renderConnectionError(err);
+    }
+  });
+  document.getElementById('mobile-user-avatar-pick-btn').addEventListener('click', () => {
+    document.getElementById('mobile-user-avatar-input')?.click();
+  });
+  document.getElementById('mobile-user-avatar-clear-btn').addEventListener('click', () => {
+    mobileState.settings.userAvatar = '';
+    renderMobileUserIdentity();
+  });
+  document.getElementById('mobile-user-save-btn').addEventListener('click', saveMobileUserProfile);
+  document.getElementById('mobile-user-avatar-input').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      mobileState.settings.userAvatar = await readFileAsDataUrl(file);
+      renderMobileUserIdentity();
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      event.target.value = '';
     }
   });
   document.getElementById('mobile-new-folder-btn').addEventListener('click', createNewFolder);
@@ -1725,6 +1820,12 @@ async function init() {
   bindEvents();
   autosizeInput();
   populateBackendInput();
+  syncMobileViewport();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncMobileViewport);
+    window.visualViewport.addEventListener('scroll', syncMobileViewport);
+  }
+  window.addEventListener('orientationchange', () => window.setTimeout(syncMobileViewport, 120));
 
   try {
     await loadInitialData();

@@ -9,130 +9,123 @@ workflows:
         distribution_type: ad_hoc
         bundle_identifier: app.kiwi4193.andromeda2796
       vars:
+        APP_NAME: "MiniStar"
         BUNDLE_ID: "app.kiwi4193.andromeda2796"
-        TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
+        DEVELOPMENT_TEAM: "3K3Y88J6DX"
         CERT_PASSWORD: "1"
+        TAURI_APP_DIR: "$CM_BUILD_DIR/mobile/tauri"
+        TAURI_SRC_DIR: "$CM_BUILD_DIR/mobile/tauri/src-tauri"
       xcode: latest
       node: 22.22.2
 
+    cache:
+      cache_paths:
+        - $HOME/.cargo/registry
+        - $HOME/.cargo/git
+        - $HOME/Library/Caches/CocoaPods
+        - $CM_BUILD_DIR/mobile/tauri/node_modules
+
     scripts:
+      - name: Show build context
+        script: |
+          set -euxo pipefail
+          uname -a
+          sw_vers
+          xcodebuild -version
+          rustc --version || true
+          cargo --version || true
+          node --version
+          npm --version
+
+      - name: Check project files
+        script: |
+          set -euxo pipefail
+          cd "$CM_BUILD_DIR"
+          find . -maxdepth 4 -type f \( -name "package.json" -o -name "tauri.conf.json" -o -name "mobile.html" \) | sort
+          test -f "$TAURI_APP_DIR/package.json"
+          test -f "$TAURI_SRC_DIR/tauri.conf.json"
+
       - name: Check and import certificates
         script: |
           set -euxo pipefail
-          
           CERT_FILE=$(find /Users/builder -name "*.p12" -type f 2>/dev/null | head -n 1)
           if [ -z "$CERT_FILE" ]; then
             echo "ERROR: No .p12 certificate found"
             exit 1
           fi
-          
           security import "$CERT_FILE" -k ~/Library/Keychains/login.keychain-db -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CERT_PASSWORD" ~/Library/Keychains/login.keychain-db || true
-          
           echo "=== Certificates ==="
           security find-identity -v -p codesigning
-          
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read f; do
-            TARGET="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
-            [ ! -f "$TARGET" ] && cp "$f" "$TARGET"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read -r f; do
+            cp "$f" "$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
           done
 
-      - name: Install Rust
+      - name: Install Rust and iOS targets
         script: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          set -euxo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          fi
           source "$HOME/.cargo/env"
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         script: |
+          set -euxo pipefail
           cd "$TAURI_APP_DIR"
-          npm ci || npm install
+          npm install
 
-      - name: Build frontend
+      - name: Patch tauri identifier
         script: |
-          cd "$TAURI_APP_DIR"
-          npm run build || echo "No build script"
+          set -euxo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("$TAURI_SRC_DIR/tauri.conf.json")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          data["identifier"] = "$BUNDLE_ID"
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print("patched", path)
+          PY
 
-      - name: Configure tauri.conf.json with correct Bundle ID
+      - name: Generate Tauri iOS project
         script: |
-          cd "$TAURI_APP_DIR"
-          CONFIG="src-tauri/tauri.conf.json"
-          
-          # 直接写入正确的 Bundle ID 配置
-          cat > "$CONFIG" << 'EOF'
-{
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
-  },
-  "bundle": {
-    "active": true,
-    "identifier": "app.kiwi4193.andromeda2796",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "iOS": {
-      "developmentTeam": "3K3Y88J6DX",
-      "bundleIdentifier": "app.kiwi4193.andromeda2796"
-    }
-  },
-  "tauri": {
-    "bundle": {},
-    "allowlist": {},
-    "windows": []
-  }
-}
-EOF
-          echo "tauri.conf.json configured with correct Bundle ID"
-
-      - name: Generate iOS project
-        script: |
+          set -euxo pipefail
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           rm -rf src-tauri/gen/apple
           npx tauri ios init
+          find src-tauri/gen/apple -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
 
-      - name: Build IPA
+      - name: Apply provisioning profiles
         script: |
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
-          
-          PROJECT_PATH=$(find src-tauri/gen/apple -name "*.xcodeproj" | head -n 1)
-          PROJECT_DIR=$(dirname "$PROJECT_PATH")
-          cd "$PROJECT_DIR"
-          
-          SCHEME_NAME=$(find . -name "*.xcscheme" | head -n 1 | sed 's/.*\///' | sed 's/\.xcscheme//')
-          
-          cp "$CM_BUILD_DIR/exportOptions.plist" ./ 2>/dev/null || true
-          
-          mkdir -p "$CM_BUILD_DIR/build"
-          
-          xcodebuild archive \
-            -project "$(basename "$PROJECT_PATH")" \
-            -scheme "$SCHEME_NAME" \
-            -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGN_IDENTITY="Apple Distribution: Smith T (3K3Y88J6DX)" \
-            CODE_SIGN_STYLE="Manual" \
-            PROVISIONING_PROFILE_SPECIFIER="f708b7ef-a0b5-4dd8-a233-3b7d78519e1f" \
-            DEVELOPMENT_TEAM="3K3Y88J6DX"
-          
-          if [ -f "exportOptions.plist" ]; then
-            xcodebuild -exportArchive \
-              -archivePath "$CM_BUILD_DIR/build/ministar.xcarchive" \
-              -exportPath "$CM_BUILD_DIR/build/ipa" \
-              -exportOptionsPlist exportOptions.plist
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "No Xcode project found under src-tauri/gen/apple"
+            exit 1
           fi
-          
-          find "$CM_BUILD_DIR/build" -name "*.ipa" -print
+          keychain initialize
+          xcode-project use-profiles --project "$PROJECT_PATH"
+
+      - name: Build signed IPA
+        script: |
+          set -euxo pipefail
+          source "$HOME/.cargo/env"
+          cd "$TAURI_APP_DIR"
+          export DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
+          npx tauri ios build --export-method ad-hoc
+
+      - name: List generated artifacts
+        script: |
+          set -euxo pipefail
+          find "$TAURI_SRC_DIR/gen/apple/build" -maxdepth 5 \( -name "*.ipa" -o -name "*.app" -o -name "*.dSYM" -o -name "*.dSYM.zip" \) -print || true
 
     artifacts:
-      - build/ipa/*.ipa
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.ipa
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.app
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.dSYM
+      - mobile/tauri/src-tauri/gen/apple/build/**/*.dSYM.zip

@@ -125,7 +125,7 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           export DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
-          npx tauri ios build --export-method ad-hoc
+          npx tauri ios build --export-method release-testing
 
       - name: List generated artifacts
         script: |

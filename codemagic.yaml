@@ -59,7 +59,12 @@ workflows:
           security find-identity -v -p codesigning
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read -r f; do
-            cp "$f" "$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
+            target="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
+            if [ "$f" = "$target" ]; then
+              echo "Profile already in place: $f"
+              continue
+            fi
+            cp -f "$f" "$target"
           done
 
       - name: Install Rust and iOS targets

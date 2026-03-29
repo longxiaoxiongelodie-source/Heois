@@ -54,42 +54,43 @@ workflows:
           cd "$TAURI_APP_DIR"
           npm run build || echo "No build script"
 
-      - name: Configure tauri.conf.json
+      - name: Configure tauri.conf.json with correct Bundle ID
         script: |
           cd "$TAURI_APP_DIR"
           CONFIG="src-tauri/tauri.conf.json"
           
-          echo '{' > "$CONFIG"
-          echo '  "build": {' >> "$CONFIG"
-          echo '    "beforeDevCommand": "npm run dev",' >> "$CONFIG"
-          echo '    "beforeBuildCommand": "npm run build",' >> "$CONFIG"
-          echo '    "devUrl": "http://localhost:1420",' >> "$CONFIG"
-          echo '    "frontendDist": "../dist"' >> "$CONFIG"
-          echo '  },' >> "$CONFIG"
-          echo '  "bundle": {' >> "$CONFIG"
-          echo '    "active": true,' >> "$CONFIG"
-          echo '    "identifier": "app.kiwi4193.andromeda2796",' >> "$CONFIG"
-          echo '    "icon": [' >> "$CONFIG"
-          echo '      "icons/32x32.png",' >> "$CONFIG"
-          echo '      "icons/128x128.png",' >> "$CONFIG"
-          echo '      "icons/128x128@2x.png",' >> "$CONFIG"
-          echo '      "icons/icon.icns",' >> "$CONFIG"
-          echo '      "icons/icon.ico"' >> "$CONFIG"
-          echo '    ],' >> "$CONFIG"
-          echo '    "iOS": {' >> "$CONFIG"
-          echo '      "developmentTeam": "3K3Y88J6DX",' >> "$CONFIG"
-          echo '      "bundleIdentifier": "app.kiwi4193.andromeda2796"' >> "$CONFIG"
-          echo '    }' >> "$CONFIG"
-          echo '  },' >> "$CONFIG"
-          echo '  "tauri": {' >> "$CONFIG"
-          echo '    "bundle": {},' >> "$CONFIG"
-          echo '    "allowlist": {},' >> "$CONFIG"
-          echo '    "windows": []' >> "$CONFIG"
-          echo '  }' >> "$CONFIG"
-          echo '}' >> "$CONFIG"
-          
-          echo "tauri.conf.json configured"
-          cat "$CONFIG"
+          # 直接写入正确的 Bundle ID 配置
+          cat > "$CONFIG" << 'EOF'
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "identifier": "app.kiwi4193.andromeda2796",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "iOS": {
+      "developmentTeam": "3K3Y88J6DX",
+      "bundleIdentifier": "app.kiwi4193.andromeda2796"
+    }
+  },
+  "tauri": {
+    "bundle": {},
+    "allowlist": {},
+    "windows": []
+  }
+}
+EOF
+          echo "tauri.conf.json configured with correct Bundle ID"
 
       - name: Generate iOS project
         script: |

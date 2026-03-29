@@ -44,6 +44,7 @@ workflows:
           find . -maxdepth 4 -type f \( -name "package.json" -o -name "tauri.conf.json" -o -name "mobile.html" \) | sort
           test -f "$TAURI_APP_DIR/package.json"
           test -f "$TAURI_SRC_DIR/tauri.conf.json"
+          test -f "$TAURI_APP_DIR/web/mobile.html"
 
       - name: Check and import certificates
         script: |
@@ -125,6 +126,7 @@ workflows:
           source "$HOME/.cargo/env"
           cd "$TAURI_APP_DIR"
           export DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
+          export APPLE_DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"
           npx tauri ios build --export-method release-testing
 
       - name: List generated artifacts

@@ -87,12 +87,15 @@ workflows:
           set -euxo pipefail
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
-          path = Path("$TAURI_SRC_DIR/tauri.conf.json")
-          data = json.loads(path.read_text(encoding="utf-8"))
-          data["identifier"] = "$BUNDLE_ID"
-          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-          print("patched", path)
+          tauri_src = os.environ['TAURI_SRC_DIR']
+          bundle_id = os.environ['BUNDLE_ID']
+          path = Path(tauri_src) / 'tauri.conf.json'
+          data = json.loads(path.read_text(encoding='utf-8'))
+          data['identifier'] = bundle_id
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          print('patched', path)
           PY
 
       - name: Generate Tauri iOS project

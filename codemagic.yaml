@@ -46,27 +46,13 @@ workflows:
           test -f "$TAURI_SRC_DIR/tauri.conf.json"
           test -f "$TAURI_APP_DIR/web/mobile.html"
 
-      - name: Check and import certificates
+      - name: Inspect signing assets
         script: |
           set -euxo pipefail
-          CERT_FILE=$(find /Users/builder -name "*.p12" -type f 2>/dev/null | head -n 1)
-          if [ -z "$CERT_FILE" ]; then
-            echo "ERROR: No .p12 certificate found"
-            exit 1
-          fi
-          security import "$CERT_FILE" -k ~/Library/Keychains/login.keychain-db -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$CERT_PASSWORD" ~/Library/Keychains/login.keychain-db || true
           echo "=== Certificates ==="
-          security find-identity -v -p codesigning
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          find /Users/builder -name "*.mobileprovision" -type f 2>/dev/null | while read -r f; do
-            target="$HOME/Library/MobileDevice/Provisioning Profiles/$(basename "$f")"
-            if [ "$f" = "$target" ]; then
-              echo "Profile already in place: $f"
-              continue
-            fi
-            cp -f "$f" "$target"
-          done
+          security find-identity -v -p codesigning || true
+          echo "=== Provisioning Profiles ==="
+          find "$HOME/Library/MobileDevice/Provisioning Profiles" -maxdepth 1 -name "*.mobileprovision" -print || true
 
       - name: Install Rust and iOS targets
         script: |
@@ -117,7 +103,6 @@ workflows:
             echo "No Xcode project found under src-tauri/gen/apple"
             exit 1
           fi
-          keychain initialize
           xcode-project use-profiles --project "$PROJECT_PATH"
 
       - name: Build signed IPA

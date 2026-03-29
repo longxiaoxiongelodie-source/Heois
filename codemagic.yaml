@@ -112,6 +112,22 @@ workflows:
           echo "Using certificate: $CERT_FILE"
           echo "Using profile: $PROFILE_FILE"
 
+      - name: Apply provisioning profile to generated project
+        script: |
+          set -euxo pipefail
+          cd "$TAURI_APP_DIR"
+          PROJECT_PATH="$(find src-tauri/gen/apple -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "No Xcode project found under src-tauri/gen/apple"
+            exit 1
+          fi
+          xcode-project use-profiles \
+            --project "$PROJECT_PATH" \
+            --profile "$PROFILE_FILE" \
+            --archive-method ad-hoc \
+            --custom-export-options='{"provisioningProfiles":{"app.kiwi4193.andromeda2796":"app.kiwi4193.andromeda2796"}}' \
+            --export-options-plist "$CM_BUILD_DIR/exportOptions.plist"
+
       - name: Build signed IPA
         script: |
           set -euxo pipefail

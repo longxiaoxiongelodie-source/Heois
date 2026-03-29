@@ -1,5 +1,5 @@
 import { apiAddConvToFolder, apiCreateFolder, apiDeleteConversation, apiGetAvailableModels, apiGetConversations, apiGetFolders, apiGetSettings, apiRemoveConvFromFolder, apiReorderFolderConvs, apiSaveConversations, apiSaveSettings } from './api.js';
-import { BACKEND_BASE_URL, BACKEND_WS_URL } from './state.js';
+import { BACKEND_BASE_URL, BACKEND_WS_URL, getDefaultBackendBaseUrl, getStoredBackendBaseUrl, normalizeBackendBaseUrl, setBackendBaseUrl } from './state.js';
 
 const mobileState = {
   settings: null,
@@ -1156,6 +1156,80 @@ function updateSettingsSheet() {
   if (healthEl) healthEl.textContent = healthLabel;
 }
 
+function updateBackendStatus(message = '', isError = false) {
+  const el = document.getElementById('mobile-backend-status');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? '#d74b62' : 'rgba(28, 35, 64, 0.66)';
+}
+
+function populateBackendInput() {
+  const input = document.getElementById('mobile-backend-input');
+  if (!input) return;
+  input.value = getStoredBackendBaseUrl() || BACKEND_BASE_URL || getDefaultBackendBaseUrl();
+  updateBackendStatus(`当前地址：${BACKEND_BASE_URL}`);
+}
+
+function openBackendSheet(withMessage = '') {
+  closeSheet('mobile-settings-sheet');
+  populateBackendInput();
+  if (withMessage) updateBackendStatus(withMessage, true);
+  openSheet('mobile-backend-sheet');
+  window.setTimeout(() => {
+    const input = document.getElementById('mobile-backend-input');
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, 120);
+}
+
+async function requestHealthWithBaseUrl(baseUrl) {
+  const resp = await fetch(`${baseUrl}/api/health`);
+  if (!resp.ok) throw new Error(`连接后端失败（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+function renderConnectionError(err) {
+  const wrap = document.getElementById('mobile-messages');
+  wrap.innerHTML = `
+    <div class="mobile-empty-state">
+      无法连接 StarT 后端。<br>${escHtml(err.message)}
+      <div class="mobile-empty-action-row">
+        <button id="mobile-open-backend-sheet-btn" class="mobile-empty-action">配置后端地址</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('mobile-open-backend-sheet-btn')?.addEventListener('click', () => openBackendSheet());
+}
+
+async function connectBackend(rawValue, { persist = false, reload = false } = {}) {
+  const normalized = normalizeBackendBaseUrl(rawValue);
+  if (!normalized) {
+    updateBackendStatus('地址格式无效，请输入 IP:端口 或完整 http 地址。', true);
+    return false;
+  }
+  updateBackendStatus('正在测试连接…');
+  try {
+    const json = await requestHealthWithBaseUrl(normalized);
+    if (!persist) {
+      mobileState.healthMeta = json?.meta || null;
+      updateSettingsSheet();
+      updateBackendStatus(`连接成功：${normalized}`);
+      return true;
+    }
+    setBackendBaseUrl(normalized);
+    mobileState.healthMeta = json?.meta || null;
+    updateSettingsSheet();
+    updateBackendStatus(`连接成功：${normalized}`);
+    if (reload) await loadInitialData();
+    return true;
+  } catch (err) {
+    updateBackendStatus(err.message, true);
+    if (reload) renderConnectionError(err);
+    return false;
+  }
+}
+
 function isNearMessagesBottom() {
   const wrap = document.getElementById('mobile-messages');
   if (!wrap) return true;
@@ -1433,12 +1507,27 @@ async function callBackendChat(requestMessages, onDelta, conversationId) {
 }
 
 async function healthCheck() {
-  const resp = await fetch(`${BACKEND_BASE_URL}/api/health`);
-  if (!resp.ok) throw new Error(`连接后端失败（HTTP ${resp.status}）`);
-  const json = await resp.json();
+  const json = await requestHealthWithBaseUrl(BACKEND_BASE_URL);
   mobileState.healthMeta = json?.meta || null;
   updateSettingsSheet();
   return json;
+}
+
+async function loadInitialData() {
+  await healthCheck();
+  const [settings, conversations, folders] = await Promise.all([
+    apiGetSettings(),
+    apiGetConversations(),
+    apiGetFolders(),
+  ]);
+  mobileState.settings = settings;
+  mobileState.conversations = Array.isArray(conversations) ? conversations : [];
+  mobileState.folders = Array.isArray(folders) ? folders : [];
+  applyTimelineSelection();
+  renderMessages();
+  renderPicker();
+  updateSettingsSheet();
+  await loadModelCatalog();
 }
 
 function applyTimelineSelection() {
@@ -1473,6 +1562,8 @@ function bindEvents() {
   document.getElementById('mobile-history-sheet-close').addEventListener('click', () => closeSheet('mobile-history-sheet'));
   document.getElementById('mobile-settings-btn').addEventListener('click', () => openSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-sheet-close').addEventListener('click', () => closeSheet('mobile-settings-sheet'));
+  document.getElementById('mobile-settings-backend-trigger').addEventListener('click', () => openBackendSheet());
+  document.getElementById('mobile-backend-sheet-close').addEventListener('click', () => closeSheet('mobile-backend-sheet'));
   document.getElementById('mobile-conv-actions-close').addEventListener('click', () => closeSheet('mobile-conv-actions-sheet'));
   document.getElementById('mobile-move-sheet-close').addEventListener('click', () => closeSheet('mobile-move-sheet'));
   document.getElementById('mobile-message-more-close').addEventListener('click', () => closeSheet('mobile-message-more-sheet'));
@@ -1496,6 +1587,35 @@ function bindEvents() {
   document.getElementById('mobile-search-input').addEventListener('input', (event) => {
     mobileState.search = event.target.value || '';
     renderPicker();
+  });
+  document.getElementById('mobile-backend-test-btn').addEventListener('click', async () => {
+    const value = document.getElementById('mobile-backend-input')?.value || '';
+    await connectBackend(value, { persist: false, reload: false });
+  });
+  document.getElementById('mobile-backend-save-btn').addEventListener('click', async () => {
+    const value = document.getElementById('mobile-backend-input')?.value || '';
+    const ok = await connectBackend(value, { persist: true, reload: true });
+    if (ok) {
+      closeSheet('mobile-backend-sheet');
+      showToast('已连接新后端');
+    }
+  });
+  document.getElementById('mobile-backend-reset-btn').addEventListener('click', async () => {
+    const defaultUrl = getDefaultBackendBaseUrl();
+    document.getElementById('mobile-backend-input').value = defaultUrl;
+    updateBackendStatus('正在恢复默认地址…');
+    try {
+      const json = await requestHealthWithBaseUrl(defaultUrl);
+      setBackendBaseUrl('');
+      mobileState.healthMeta = json?.meta || null;
+      await loadInitialData();
+      populateBackendInput();
+      closeSheet('mobile-backend-sheet');
+      showToast('已恢复默认地址');
+    } catch (err) {
+      updateBackendStatus(err.message, true);
+      renderConnectionError(err);
+    }
   });
   document.getElementById('mobile-new-folder-btn').addEventListener('click', createNewFolder);
   document.getElementById('mobile-new-chat-btn').addEventListener('click', async () => createNewConversation());
@@ -1604,26 +1724,14 @@ function bindEvents() {
 async function init() {
   bindEvents();
   autosizeInput();
+  populateBackendInput();
 
   try {
-    await healthCheck();
-    const [settings, conversations, folders] = await Promise.all([
-      apiGetSettings(),
-      apiGetConversations(),
-      apiGetFolders(),
-    ]);
-    mobileState.settings = settings;
-    mobileState.conversations = Array.isArray(conversations) ? conversations : [];
-    mobileState.folders = Array.isArray(folders) ? folders : [];
-    applyTimelineSelection();
-    renderMessages();
-    renderPicker();
-    updateSettingsSheet();
-    await loadModelCatalog();
+    await loadInitialData();
   } catch (err) {
     console.error('[Mobile] 初始化失败：', err);
-    document.getElementById('mobile-messages').innerHTML =
-      `<div class="mobile-empty-state">无法连接本地 StarT 后端。<br>${escHtml(err.message)}</div>`;
+    renderConnectionError(err);
+    openBackendSheet(err.message);
     showToast('后端未连接');
   }
 }

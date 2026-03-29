@@ -128,10 +128,10 @@
           <div class="mobile-model-title">当前模型</div>
           <div id="mobile-settings-model-sub" class="mobile-model-sub">未选择模型</div>
         </div>
-        <div class="mobile-model-item mobile-settings-static">
+        <button id="mobile-settings-backend-trigger" class="mobile-model-item">
           <div class="mobile-model-title">后端地址</div>
           <div id="mobile-settings-backend-sub" class="mobile-model-sub"></div>
-        </div>
+        </button>
         <div class="mobile-model-item mobile-settings-static">
           <div class="mobile-model-title">连接状态</div>
           <div id="mobile-settings-health-sub" class="mobile-model-sub">检查中…</div>
@@ -184,6 +184,30 @@
         <button id="mobile-message-more-regen-btn" class="mobile-action-row">重新生成</button>
         <button id="mobile-message-more-tts-btn" class="mobile-action-row">朗读</button>
         <button id="mobile-message-more-delete-btn" class="mobile-action-row danger">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mobile-backend-sheet" class="mobile-sheet hidden">
+    <div class="mobile-sheet-backdrop"></div>
+    <div class="mobile-sheet-panel">
+      <div class="mobile-sheet-grabber"></div>
+      <div class="mobile-sheet-head">
+        <h3>连接 StarT</h3>
+        <button id="mobile-backend-sheet-close" class="mobile-icon-btn">✕</button>
+      </div>
+      <div class="mobile-sheet-body">
+        <label class="mobile-backend-field">
+          <span class="mobile-model-title">后端地址</span>
+          <input id="mobile-backend-input" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="例如 192.168.1.23:8000" />
+        </label>
+        <div class="mobile-model-sub">支持直接输入 `IP:端口`，也支持完整地址，如 `http://192.168.1.23:8000`。</div>
+        <div id="mobile-backend-status" class="mobile-model-sub"></div>
+        <div class="mobile-sheet-actions">
+          <button id="mobile-backend-test-btn" class="mobile-sheet-primary">测试连接</button>
+          <button id="mobile-backend-save-btn" class="mobile-sheet-primary">保存并连接</button>
+          <button id="mobile-backend-reset-btn" class="mobile-sheet-secondary">恢复默认</button>
+        </div>
       </div>
     </div>
   </div>

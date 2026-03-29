@@ -85,16 +85,60 @@ export const state = {
   _scratchpadTimer: null,
 };
 
+export const MOBILE_BACKEND_OVERRIDE_KEY = 'ministar-backend-base-url';
+
 const _HOST = typeof window !== 'undefined' && window.location?.hostname
   ? window.location.hostname
   : '127.0.0.1';
 const _PROTO = typeof window !== 'undefined' && window.location?.protocol === 'https:'
   ? 'https:'
   : 'http:';
-const _WS_PROTO = _PROTO === 'https:' ? 'wss:' : 'ws:';
 
-export const BACKEND_BASE_URL = `${_PROTO}//${_HOST}:8000`;
-export const BACKEND_WS_URL   = `${_WS_PROTO}//${_HOST}:8000`;
+export function getDefaultBackendBaseUrl() {
+  return `${_PROTO}//${_HOST}:8000`;
+}
+
+export function normalizeBackendBaseUrl(raw = '') {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const withProto = /^https?:\/\//i.test(text) ? text : `http://${text}`;
+  let url;
+  try {
+    url = new URL(withProto);
+  } catch {
+    return '';
+  }
+  url.hash = '';
+  url.search = '';
+  url.pathname = '';
+  if (!url.port) url.port = '8000';
+  return url.toString().replace(/\/$/, '');
+}
+
+function resolveBackendWsUrl(baseUrl) {
+  const httpUrl = new URL(baseUrl);
+  httpUrl.protocol = httpUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  return httpUrl.toString().replace(/\/$/, '');
+}
+
+export function getStoredBackendBaseUrl() {
+  if (typeof window === 'undefined' || !window.localStorage) return '';
+  return normalizeBackendBaseUrl(window.localStorage.getItem(MOBILE_BACKEND_OVERRIDE_KEY) || '');
+}
+
+export let BACKEND_BASE_URL = getStoredBackendBaseUrl() || getDefaultBackendBaseUrl();
+export let BACKEND_WS_URL = resolveBackendWsUrl(BACKEND_BASE_URL);
+
+export function setBackendBaseUrl(raw = '') {
+  const normalized = normalizeBackendBaseUrl(raw);
+  if (typeof window !== 'undefined' && window.localStorage) {
+    if (normalized) window.localStorage.setItem(MOBILE_BACKEND_OVERRIDE_KEY, normalized);
+    else window.localStorage.removeItem(MOBILE_BACKEND_OVERRIDE_KEY);
+  }
+  BACKEND_BASE_URL = normalized || getDefaultBackendBaseUrl();
+  BACKEND_WS_URL = resolveBackendWsUrl(BACKEND_BASE_URL);
+  return BACKEND_BASE_URL;
+}
 
 export const DEBUG_REQUEST = false;
 export const DEBUG_SUMMARY = true;

@@ -930,6 +930,7 @@ function bindConversationInteractions(element, conv, options = {}) {
   let timer = null;
   let startX = 0;
   let startY = 0;
+  let moved = false;
   let longPressed = false;
   let dragging = false;
   let suppressClick = false;
@@ -946,10 +947,6 @@ function bindConversationInteractions(element, conv, options = {}) {
     if (!active) clearPickerSelection();
   };
 
-  const setPressing = active => {
-    element.classList.toggle('is-pressing', active);
-  };
-
   const activateConversation = () => {
     mobileState.currentId = conv.id;
     if (options.fromHistorySheet) {
@@ -961,12 +958,10 @@ function bindConversationInteractions(element, conv, options = {}) {
   };
 
   element.addEventListener('touchstart', (event) => {
-    event.preventDefault();
-    setPickerInteracting(true);
-    setPressing(true);
     const touch = event.changedTouches[0];
     startX = touch?.clientX || 0;
     startY = touch?.clientY || 0;
+    moved = false;
     longPressed = false;
     dragging = false;
     actionOpened = false;
@@ -976,9 +971,10 @@ function bindConversationInteractions(element, conv, options = {}) {
       longPressed = true;
       actionOpened = true;
       suppressClick = true;
+      setPickerInteracting(true);
       openConvActions(conv.id);
-    }, 220);
-  }, { passive: false });
+    }, 320);
+  }, { passive: true });
 
   element.addEventListener('touchmove', (event) => {
     if (actionOpened) {
@@ -990,14 +986,14 @@ function bindConversationInteractions(element, conv, options = {}) {
     const dy = (touch?.clientY || 0) - startY;
     const dist = Math.hypot(dx, dy);
     if (!longPressed && dist > 10) {
+      moved = true;
       clearTimer();
-      setPressing(false);
       return;
     }
     if (longPressed && !dragging && dist > 12) {
       dragging = true;
       suppressClick = true;
-      setPressing(false);
+      setPickerInteracting(true);
       startConvDrag(conv.id, conv.title || '新对话', touch.clientX, touch.clientY);
     }
     if (dragging) {
@@ -1008,7 +1004,6 @@ function bindConversationInteractions(element, conv, options = {}) {
 
   element.addEventListener('touchend', (event) => {
     clearTimer();
-    setPressing(false);
     if (dragging) {
       finishConvDrag();
       dragging = false;
@@ -1035,10 +1030,17 @@ function bindConversationInteractions(element, conv, options = {}) {
       window.setTimeout(() => { suppressClick = false; }, 0);
       return;
     }
+    if (moved) {
+      longPressed = false;
+      actionOpened = false;
+      setPickerInteracting(false);
+      return;
+    }
     event.preventDefault();
     longPressed = false;
     actionOpened = false;
     setPickerInteracting(false);
+    suppressClick = true;
     activateConversation();
     window.setTimeout(() => { suppressClick = false; }, 0);
   }, { passive: false });
@@ -1049,7 +1051,7 @@ function bindConversationInteractions(element, conv, options = {}) {
     dragging = false;
     longPressed = false;
     actionOpened = false;
-    setPressing(false);
+    moved = false;
     setPickerInteracting(false);
   }, { passive: true });
 

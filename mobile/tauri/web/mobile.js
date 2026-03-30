@@ -955,8 +955,6 @@ function bindConversationInteractions(element, conv, options = {}) {
     if (options.fromHistorySheet) {
       mobileState.timelineMode = isImportedConversation(conv) ? 'oldtimes' : 'now';
       closeSheet('mobile-history-sheet');
-    } else {
-      closePicker();
     }
     renderPicker();
     renderMessages();
@@ -1585,6 +1583,9 @@ function syncMobileViewport() {
   root.style.setProperty('--mobile-vv-top', '0px');
   root.style.setProperty('--mobile-kb-offset', `${keyboardOffset}px`);
   body?.classList.toggle('keyboard-open', keyboardOffset > 24);
+  if (keyboardOffset > 24) {
+    window.scrollTo(0, 0);
+  }
 }
 
 function toggleFavoriteModel(providerId, modelName) {
@@ -2062,6 +2063,15 @@ function bindEvents() {
     setTimelineMode(mobileState.timelineMode === 'oldtimes' ? 'now' : 'oldtimes');
   });
   document.getElementById('mobile-user-input').addEventListener('input', autosizeInput);
+  document.getElementById('mobile-user-input').addEventListener('focus', () => {
+    window.setTimeout(() => {
+      syncMobileViewport();
+      scrollMessagesToBottom(false);
+    }, 60);
+  });
+  document.getElementById('mobile-user-input').addEventListener('blur', () => {
+    window.setTimeout(syncMobileViewport, 60);
+  });
   document.getElementById('mobile-user-input').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && event.ctrlKey) {
       event.preventDefault();

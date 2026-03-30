@@ -795,8 +795,8 @@ function svgLabelDataUrl(text, {
 
 function buildHistoryLabelMarkup(title, sub) {
   return `
-    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 34, fontSize: 21, fontWeight: 700, color: '#ecf2ff' })}">
-    <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 22, fontSize: 12, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
+    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 30, fontSize: 17, fontWeight: 700, color: '#ecf2ff' })}">
+    <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 18, fontSize: 10, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
   `;
 }
 
@@ -932,6 +932,18 @@ function bindConversationInteractions(element, conv, options = {}) {
     element.classList.toggle('is-pressing', active);
   };
 
+  const activateConversation = () => {
+    mobileState.currentId = conv.id;
+    if (options.fromHistorySheet) {
+      mobileState.timelineMode = isImportedConversation(conv) ? 'oldtimes' : 'now';
+      closeSheet('mobile-history-sheet');
+    } else {
+      closePicker();
+    }
+    renderPicker();
+    renderMessages();
+  };
+
   element.addEventListener('touchstart', (event) => {
     event.preventDefault();
     setPickerInteracting(true);
@@ -1001,10 +1013,17 @@ function bindConversationInteractions(element, conv, options = {}) {
       event.preventDefault();
       openConvActions(conv.id);
       suppressClick = true;
+      longPressed = false;
+      actionOpened = false;
+      setPickerInteracting(false);
+      window.setTimeout(() => { suppressClick = false; }, 0);
+      return;
     }
+    event.preventDefault();
     longPressed = false;
     actionOpened = false;
     setPickerInteracting(false);
+    activateConversation();
     window.setTimeout(() => { suppressClick = false; }, 0);
   }, { passive: false });
 
@@ -1029,15 +1048,7 @@ function bindConversationInteractions(element, conv, options = {}) {
       event.stopPropagation();
       return;
     }
-    mobileState.currentId = conv.id;
-    if (options.fromHistorySheet) {
-      mobileState.timelineMode = isImportedConversation(conv) ? 'oldtimes' : 'now';
-      closeSheet('mobile-history-sheet');
-    } else {
-      closePicker();
-    }
-    renderPicker();
-    renderMessages();
+    activateConversation();
   });
 }
 

@@ -655,7 +655,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-folder-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   -webkit-user-select: none;
   user-select: none;
@@ -697,7 +697,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 
 .mobile-history-item {
   width: 100%;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border: 1px solid transparent;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.03);
@@ -737,15 +737,15 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-history-line + .mobile-history-line {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .mobile-history-line-title {
-  height: 34px;
+  height: 30px;
 }
 
 .mobile-history-line-sub {
-  height: 22px;
+  height: 18px;
   opacity: 0.68;
 }
 

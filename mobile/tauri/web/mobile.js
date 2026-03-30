@@ -19,6 +19,7 @@ const mobileState = {
   drag: null,
   modelFavorites: JSON.parse(localStorage.getItem('start-mobile-model-favorites') || '[]'),
   appIconChoice: localStorage.getItem('ministar-app-icon-choice') || 'default',
+  collapsedFolders: new Set(JSON.parse(localStorage.getItem('ministar-mobile-collapsed-folders') || '[]')),
 };
 
 let mobileTtsAudio = null;
@@ -134,6 +135,18 @@ function getCurrentMessage() {
 
 function getCurrentConversation() {
   return mobileState.conversations.find(conv => conv.id === mobileState.currentId) || null;
+}
+
+function persistCollapsedFolders() {
+  localStorage.setItem('ministar-mobile-collapsed-folders', JSON.stringify([...mobileState.collapsedFolders]));
+}
+
+function toggleFolderCollapsed(folderId) {
+  if (!folderId) return;
+  if (mobileState.collapsedFolders.has(folderId)) mobileState.collapsedFolders.delete(folderId);
+  else mobileState.collapsedFolders.add(folderId);
+  persistCollapsedFolders();
+  renderPicker();
 }
 
 function isImportedConversation(conv) {
@@ -679,6 +692,7 @@ function renderPicker() {
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'));
 
   folderItems.forEach(folder => {
+    const isCollapsed = mobileState.collapsedFolders.has(folder.id);
     const folderConvs = (folder.conv_ids || [])
       .map(id => convs.find(conv => conv.id === id))
       .filter(Boolean)
@@ -700,21 +714,20 @@ function renderPicker() {
     const head = document.createElement('div');
     head.className = 'mobile-folder-head';
     head.innerHTML = `
-      <div class="mobile-folder-title">${escHtml(folder.name || '未命名文件夹')}</div>
+      <button class="mobile-folder-summary" title="折叠或展开">
+        <span class="mobile-folder-title">${escHtml(folder.name || '未命名文件夹')}</span>
+        <span class="mobile-folder-caret${isCollapsed ? ' collapsed' : ''}">⌄</span>
+      </button>
       <button class="mobile-folder-toggle" title="新对话">＋</button>
     `;
+    head.querySelector('.mobile-folder-summary').addEventListener('click', () => toggleFolderCollapsed(folder.id));
     head.querySelector('.mobile-folder-toggle').addEventListener('click', () => createNewConversation(folder.id));
     group.appendChild(head);
 
     const list = document.createElement('div');
-    list.className = 'mobile-folder-convs';
-    if (folderConvs.length) {
+    list.className = `mobile-folder-convs${isCollapsed ? ' collapsed' : ''}`;
+    if (folderConvs.length && !isCollapsed) {
       folderConvs.forEach(conv => list.appendChild(buildHistoryButton(conv, folder.name || '文件夹')));
-    } else {
-      const empty = document.createElement('div');
-      empty.className = 'mobile-history-sub';
-      empty.textContent = keyword ? '没有匹配到会话' : '这个文件夹里还没有会话';
-      list.appendChild(empty);
     }
     group.appendChild(list);
     wrap.appendChild(group);

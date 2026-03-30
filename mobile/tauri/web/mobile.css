@@ -557,9 +557,9 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-timeline-btn {
-  min-width: 42px;
+  min-width: 40px;
   height: 42px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid var(--mobile-border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
@@ -568,7 +568,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -579,7 +579,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-timeline-icon-btn {
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .mobile-search-shell {
@@ -636,6 +636,19 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   padding: 4px 0;
 }
 
+.mobile-folder-summary {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
 .mobile-folder-title {
   font-size: 20px;
   font-weight: 700;
@@ -643,6 +656,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   user-select: none;
   -webkit-touch-callout: none;
   pointer-events: none;
+  min-width: 0;
 }
 
 .mobile-folder-toggle {
@@ -652,10 +666,28 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   cursor: pointer;
 }
 
+.mobile-folder-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mobile-muted);
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.mobile-folder-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
 .mobile-folder-convs {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.mobile-folder-convs.collapsed {
+  display: none;
 }
 
 .mobile-history-item {

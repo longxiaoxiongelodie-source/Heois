@@ -1,4 +1,4 @@
-import { apiAddConvToFolder, apiCreateFolder, apiDeleteConversation, apiGetAvailableModels, apiGetConversations, apiGetFolders, apiGetSettings, apiRemoveConvFromFolder, apiReorderFolderConvs, apiSaveConversations, apiSaveSettings } from './api.js';
+import { apiAddConvToFolder, apiAddGlobalMemory, apiCreateFolder, apiDeleteConversation, apiGetAvailableModels, apiGetConversations, apiGetFolders, apiGetSettings, apiRemoveConvFromFolder, apiReorderFolderConvs, apiSaveConversations, apiSaveSettings } from './api.js';
 import { BACKEND_BASE_URL, BACKEND_WS_URL, getDefaultBackendBaseUrl, getStoredBackendBaseUrl, normalizeBackendBaseUrl, setBackendBaseUrl } from './state.js';
 
 const mobileState = {
@@ -288,6 +288,26 @@ function clearMobileTtsPlaybackState() {
   }
 }
 
+function bindTapAction(element, handler) {
+  if (!element) return;
+  let touched = false;
+  element.addEventListener('touchend', (event) => {
+    touched = true;
+    event.preventDefault();
+    event.stopPropagation();
+    handler(event);
+    window.setTimeout(() => { touched = false; }, 0);
+  }, { passive: false });
+  element.addEventListener('click', (event) => {
+    if (touched) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    handler(event);
+  });
+}
+
 async function requestMobileTtsAudio(msg) {
   const tts = mobileState.settings?.tts || {};
   if (!tts.enabled) throw new Error('请先在桌面端启用 TTS');
@@ -484,12 +504,28 @@ async function regenerateMobileAssistant(msg) {
   await performChat(conv);
 }
 
+async function saveAssistantMessageToMemory(msg) {
+  if (!msg || msg.role !== 'assistant') return;
+  const content = String(msg.content || '').trim();
+  if (!content) {
+    showToast('这条消息没有可写入的内容');
+    return;
+  }
+  try {
+    await apiAddGlobalMemory(content, [], '');
+    showToast('已写入长期记忆');
+  } catch (err) {
+    showToast(`写入失败：${err.message}`);
+  }
+}
+
 function openMessageMoreSheet(msg) {
   mobileState.activeMessageActionId = msg?.id || null;
   mobileState.messageDeleteConfirm = false;
   const current = getCurrentMessage();
   if (!current) return;
   document.getElementById('mobile-message-more-title').textContent = current.role === 'assistant' ? '助手消息操作' : '我的消息操作';
+  document.getElementById('mobile-message-more-memory-btn').style.display = current.role === 'assistant' ? '' : 'none';
   document.getElementById('mobile-message-more-edit-btn').style.display = current.role === 'user' ? '' : 'none';
   document.getElementById('mobile-message-more-regen-btn').style.display = current.role === 'assistant' ? '' : 'none';
   document.getElementById('mobile-message-more-tts-btn').style.display = current.role === 'assistant' ? '' : 'none';
@@ -728,7 +764,7 @@ function svgLabelDataUrl(text, {
 
 function buildHistoryLabelMarkup(title, sub) {
   return `
-    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 28, fontSize: 16, fontWeight: 600, color: '#ecf2ff' })}">
+    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 34, fontSize: 21, fontWeight: 700, color: '#ecf2ff' })}">
     <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 22, fontSize: 12, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
   `;
 }
@@ -1768,7 +1804,6 @@ function bindEvents() {
   const pickerEl = document.getElementById('mobile-picker');
   pickerEl.addEventListener('touchstart', event => {
     if (event.target.closest('input, textarea')) return;
-    event.preventDefault();
     clearPickerSelection();
   }, { passive: false });
   pickerEl.addEventListener('contextmenu', event => {
@@ -1782,28 +1817,28 @@ function bindEvents() {
     event.preventDefault();
     clearPickerSelection();
   });
-  document.getElementById('mobile-picker-toggle').addEventListener('click', togglePicker);
+  bindTapAction(document.getElementById('mobile-picker-toggle'), () => togglePicker());
   document.getElementById('mobile-chat-shell').addEventListener('click', () => {
     if (mobileState.pickerOpen) closePicker();
   });
   document.getElementById('mobile-picker-backdrop').addEventListener('click', closePicker);
-  document.getElementById('mobile-map-trigger').addEventListener('click', () => openSheet('mobile-map-sheet'));
+  bindTapAction(document.getElementById('mobile-map-trigger'), () => openSheet('mobile-map-sheet'));
   document.getElementById('mobile-map-sheet-close').addEventListener('click', () => closeSheet('mobile-map-sheet'));
-  document.getElementById('mobile-model-trigger').addEventListener('click', () => openSheet('mobile-model-sheet'));
+  bindTapAction(document.getElementById('mobile-model-trigger'), () => openSheet('mobile-model-sheet'));
   document.getElementById('mobile-model-sheet-close').addEventListener('click', () => closeSheet('mobile-model-sheet'));
-  document.getElementById('mobile-history-btn').addEventListener('click', () => {
+  bindTapAction(document.getElementById('mobile-history-btn'), () => {
     renderHistorySheet();
     openSheet('mobile-history-sheet');
   });
   document.getElementById('mobile-history-sheet-close').addEventListener('click', () => closeSheet('mobile-history-sheet'));
-  document.getElementById('mobile-settings-btn').addEventListener('click', () => openSheet('mobile-settings-sheet'));
+  bindTapAction(document.getElementById('mobile-settings-btn'), () => openSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-sheet-close').addEventListener('click', () => closeSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-app-icon-trigger').addEventListener('click', () => {
     renderAppIconSheet();
     openSheet('mobile-app-icon-sheet');
   });
   document.getElementById('mobile-app-icon-sheet-close').addEventListener('click', () => closeSheet('mobile-app-icon-sheet'));
-  document.getElementById('mobile-user-btn').addEventListener('click', openUserSheet);
+  bindTapAction(document.getElementById('mobile-user-btn'), openUserSheet);
   document.getElementById('mobile-user-sheet-close').addEventListener('click', () => closeSheet('mobile-user-sheet'));
   document.getElementById('mobile-settings-backend-trigger').addEventListener('click', () => openBackendSheet());
   document.getElementById('mobile-backend-sheet-close').addEventListener('click', () => closeSheet('mobile-backend-sheet'));
@@ -1880,8 +1915,8 @@ function bindEvents() {
       event.target.value = '';
     }
   });
-  document.getElementById('mobile-new-folder-btn').addEventListener('click', createNewFolder);
-  document.getElementById('mobile-new-chat-btn').addEventListener('click', async () => createNewConversation());
+  bindTapAction(document.getElementById('mobile-new-folder-btn'), createNewFolder);
+  bindTapAction(document.getElementById('mobile-new-chat-top-btn'), async () => createNewConversation());
   document.getElementById('mobile-conv-rename-btn').addEventListener('click', renameActiveConversation);
   document.getElementById('mobile-conv-pin-btn').addEventListener('click', togglePinActiveConversation);
   document.getElementById('mobile-conv-retitle-btn').addEventListener('click', regenerateActiveConversationTitle);
@@ -1895,6 +1930,12 @@ function bindEvents() {
     if (!msg) return;
     await copyMobileMessage(msg);
     closeSheet('mobile-message-more-sheet');
+  });
+  document.getElementById('mobile-message-more-memory-btn').addEventListener('click', async () => {
+    const msg = getCurrentMessage();
+    if (!msg) return;
+    closeSheet('mobile-message-more-sheet');
+    await saveAssistantMessageToMemory(msg);
   });
   document.getElementById('mobile-message-more-edit-btn').addEventListener('click', () => {
     const msg = getCurrentMessage();

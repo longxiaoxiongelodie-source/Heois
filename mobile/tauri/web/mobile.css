@@ -553,21 +553,33 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 #mobile-timeline-strip {
   display: inline-flex;
   gap: 8px;
+  align-items: center;
 }
 
 .mobile-timeline-btn {
-  padding: 8px 12px;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 12px;
   border: 1px solid var(--mobile-border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--mobile-muted);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .mobile-timeline-btn.active {
   background: rgba(95, 127, 199, 0.18);
   color: var(--mobile-text);
   border-color: rgba(95, 127, 199, 0.38);
+}
+
+.mobile-timeline-icon-btn {
+  font-size: 18px;
 }
 
 .mobile-search-shell {
@@ -625,7 +637,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-folder-title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   -webkit-user-select: none;
   user-select: none;
@@ -692,12 +704,12 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-history-line-title {
-  height: 28px;
+  height: 34px;
 }
 
 .mobile-history-line-sub {
   height: 22px;
-  opacity: 0.72;
+  opacity: 0.68;
 }
 
 .mobile-history-sub {
@@ -717,7 +729,6 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   gap: 12px;
   padding-top: 8px;
   border-top: 1px solid rgba(122, 144, 198, 0.1);
-  flex-wrap: wrap;
 }
 
 .mobile-foot-btn {
@@ -728,6 +739,9 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   background: transparent;
   color: var(--mobile-text);
   cursor: pointer;
+  padding: 2px 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .mobile-settings-static {

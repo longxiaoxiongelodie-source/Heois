@@ -1568,22 +1568,13 @@ function closeSheet(id) {
 }
 
 function syncMobileViewport() {
-  const root = document.documentElement;
-  const viewport = window.visualViewport;
   const body = document.body;
-  if (!root) return;
+  const viewport = window.visualViewport;
   if (!viewport) {
-    root.style.setProperty('--mobile-vh', '100vh');
-    root.style.setProperty('--mobile-vv-top', '0px');
-    root.style.setProperty('--mobile-kb-offset', '0px');
     body?.classList.remove('keyboard-open');
     return;
   }
-  const visibleHeight = Math.max(0, Math.round(viewport.height));
   const keyboardOffset = Math.max(0, Math.round((window.innerHeight || 0) - (viewport.height + viewport.offsetTop)));
-  root.style.setProperty('--mobile-vh', `${visibleHeight}px`);
-  root.style.setProperty('--mobile-vv-top', '0px');
-  root.style.setProperty('--mobile-kb-offset', `${keyboardOffset}px`);
   body?.classList.toggle('keyboard-open', keyboardOffset > 24);
 }
 

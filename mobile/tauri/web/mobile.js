@@ -812,7 +812,7 @@ function svgLabelDataUrl(text, {
 
 function buildHistoryLabelMarkup(title, sub) {
   return `
-    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 28, fontSize: 16, fontWeight: 700, color: '#ecf2ff' })}">
+    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 26, fontSize: 14, fontWeight: 700, color: '#ecf2ff' })}">
     <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 20, fontSize: 11, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
   `;
 }

@@ -148,8 +148,8 @@ textarea {
 }
 
 .mobile-icon-btn {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -157,7 +157,7 @@ textarea {
   border-radius: 999px;
   background: transparent;
   color: var(--mobile-text);
-  font-size: 22px;
+  font-size: 21px;
   cursor: pointer;
   position: relative;
   z-index: 2;
@@ -550,7 +550,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 
 .mobile-picker-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px 40px;
+  grid-template-columns: minmax(0, 1fr) 42px 42px;
   align-items: center;
   gap: 10px;
 }
@@ -646,7 +646,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 0;
   border: none;
   background: transparent;
@@ -676,13 +676,15 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   align-items: center;
   justify-content: center;
   color: var(--mobile-muted);
-  font-size: 16px;
+  font-size: 21px;
+  font-weight: 700;
   line-height: 1;
+  transform: translateY(-1px);
   transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
 .mobile-folder-caret.collapsed {
-  transform: rotate(-90deg);
+  transform: rotate(-90deg) translateX(1px);
 }
 
 .mobile-folder-convs {
@@ -779,6 +781,15 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   padding: 2px 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.mobile-foot-icon-btn {
+  width: 34px;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .mobile-settings-static {

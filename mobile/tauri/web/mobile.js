@@ -789,12 +789,16 @@ function renderPicker() {
 }
 
 function svgLabelDataUrl(text, {
-  width = 640,
   height = 26,
   fontSize = 16,
   fontWeight = 600,
   color = '#ecf2ff',
 } = {}) {
+  const textValue = String(text || '');
+  const estimatedWidth = Math.max(
+    Math.ceil(textValue.length * fontSize * (fontWeight >= 700 ? 1.08 : 0.98) + 18),
+    56,
+  );
   const safeText = String(text || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -802,14 +806,14 @@ function svgLabelDataUrl(text, {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
   const y = Math.round(height * 0.74);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><text x="0" y="${y}" fill="${color}" font-size="${fontSize}" font-weight="${fontWeight}" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">${safeText}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${estimatedWidth}" height="${height}" viewBox="0 0 ${estimatedWidth} ${height}"><text x="0" y="${y}" fill="${color}" font-size="${fontSize}" font-weight="${fontWeight}" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">${safeText}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 function buildHistoryLabelMarkup(title, sub) {
   return `
-    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 30, fontSize: 17, fontWeight: 700, color: '#ecf2ff' })}">
-    <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 18, fontSize: 10, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
+    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 32, fontSize: 20, fontWeight: 700, color: '#ecf2ff' })}">
+    <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 20, fontSize: 11, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
   `;
 }
 

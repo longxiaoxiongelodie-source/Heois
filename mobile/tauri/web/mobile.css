@@ -92,10 +92,10 @@ textarea {
   right: 0;
   z-index: 90;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
   align-items: center;
-  gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  gap: 6px;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
   border-bottom: 1px solid rgba(122, 144, 198, 0.1);
   background: rgba(14, 20, 38, 0.82);
   backdrop-filter: blur(18px);
@@ -111,7 +111,7 @@ textarea {
 }
 
 #mobile-conv-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -124,7 +124,7 @@ textarea {
   border: none;
   background: transparent;
   color: var(--mobile-muted);
-  font-size: 14px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -148,8 +148,8 @@ textarea {
 }
 
 .mobile-icon-btn {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -157,7 +157,7 @@ textarea {
   border-radius: 999px;
   background: transparent;
   color: var(--mobile-text);
-  font-size: 21px;
+  font-size: 19px;
   cursor: pointer;
   position: relative;
   z-index: 2;
@@ -184,10 +184,10 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: calc(88px + env(safe-area-inset-top)) 8px calc(140px + env(safe-area-inset-bottom));
+  padding: calc(74px + env(safe-area-inset-top)) 8px calc(128px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   scroll-behavior: smooth;
 }
 
@@ -204,7 +204,7 @@ body.keyboard-open #mobile-messages {
 .mobile-message-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .mobile-message-header.user {
@@ -212,15 +212,15 @@ body.keyboard-open #mobile-messages {
 }
 
 .mobile-msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  flex: 0 0 32px;
+  flex: 0 0 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  font-size: 15px;
+  font-size: 13px;
   background: rgba(28, 41, 73, 0.96);
   border: 1px solid rgba(122, 144, 198, 0.18);
   box-shadow: 0 6px 16px rgba(4, 8, 18, 0.18);
@@ -252,7 +252,7 @@ body.keyboard-open #mobile-messages {
 }
 
 .mobile-message-meta-model {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: rgba(226, 236, 255, 0.88);
   white-space: nowrap;
@@ -262,7 +262,7 @@ body.keyboard-open #mobile-messages {
 }
 
 .mobile-message-meta-info {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--mobile-muted);
   white-space: nowrap;
 }
@@ -273,11 +273,11 @@ body.keyboard-open #mobile-messages {
 
 .mobile-message-bubble {
   max-width: min(88%, 640px);
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid var(--mobile-border);
   box-shadow: 0 10px 24px rgba(5, 10, 24, 0.18);
-  line-height: 1.58;
+  line-height: 1.46;
   word-break: break-word;
   margin-bottom: 2px;
 }
@@ -288,16 +288,16 @@ body.keyboard-open #mobile-messages {
 
 .mobile-message.assistant .mobile-message-bubble {
   max-width: 100%;
-  padding: 0 2px;
+  padding: 0 1px;
   border: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  line-height: 1.5;
+  line-height: 1.42;
 }
 
 .mobile-message-bubble p {
-  margin: 0 0 0.66em;
+  margin: 0 0 0.54em;
 }
 
 .mobile-message-bubble p:last-child {
@@ -318,8 +318,8 @@ body.keyboard-open #mobile-messages {
 .mobile-message-actions {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  min-height: 24px;
+  gap: 10px;
+  min-height: 22px;
   margin-top: 1px;
   padding: 0 4px;
   opacity: 0.84;

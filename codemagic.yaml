@@ -101,6 +101,7 @@ workflows:
           export ALT_ICON_SRC_DIR="$TAURI_SRC_DIR/icons/ios-alternate"
           export IOS_APP_DIR="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -type d -name '*_iOS' | head -n 1)"
           export IOS_INFO_PLIST="$IOS_APP_DIR/Info.plist"
+          export IOS_XCODEPROJ="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
           python3 - <<'PY'
           import os
           import plistlib
@@ -158,6 +159,45 @@ workflows:
           print("Injected alternate icons into", ios_app_dir)
           print("Patched", info_plist)
           PY
+          ruby - <<'RUBY'
+          require 'xcodeproj'
+          require 'pathname'
+
+          project_path = ENV.fetch('IOS_XCODEPROJ')
+          ios_app_dir = Pathname.new(ENV.fetch('IOS_APP_DIR'))
+          project = Xcodeproj::Project.open(project_path)
+          target = project.targets.find { |t| t.name.end_with?('_iOS') } || project.targets.first
+          resources = target.resources_build_phase
+          project_dir = Pathname.new(File.dirname(project_path))
+          group = project.main_group.find_subpath('AlternateIcons', true)
+
+          icon_files = %w[
+            ministar-seal-120.png
+            ministar-seal-152.png
+            ministar-seal-167.png
+            ministar-seal-180.png
+            ministar-orbit-120.png
+            ministar-orbit-152.png
+            ministar-orbit-167.png
+            ministar-orbit-180.png
+            ministar-spark-120.png
+            ministar-spark-152.png
+            ministar-spark-167.png
+            ministar-spark-180.png
+          ]
+
+          icon_files.each do |name|
+            absolute = ios_app_dir.join(name)
+            relative = absolute.relative_path_from(project_dir).to_s
+            ref = group.files.find { |f| f.path == relative } || group.new_file(relative)
+            unless resources.files_references.any? { |f| f.path == ref.path }
+              resources.add_file_reference(ref, true)
+            end
+          end
+
+          project.save
+          puts "Added alternate icons to Xcode resources: #{project_path}"
+          RUBY
 
       - name: Locate manual signing assets
         script: |

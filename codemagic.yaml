@@ -99,132 +99,84 @@ workflows:
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
           export ALT_ICON_SRC_DIR="$TAURI_SRC_DIR/icons/ios-alternate"
-          export IOS_APP_DIR="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -type d -name '*_iOS' | head -n 1)"
-          export IOS_INFO_PLIST="$IOS_APP_DIR/Info.plist"
+          export IOS_ASSETS_DIR="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -type d -name 'Assets.xcassets' | head -n 1)"
           export IOS_XCODEPROJ="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
           python3 - <<'PY'
           import os
-          import plistlib
           import shutil
+          import json
           from pathlib import Path
 
           alt_src = Path(os.environ['ALT_ICON_SRC_DIR'])
-          ios_app_dir = Path(os.environ['IOS_APP_DIR'])
-          info_plist = Path(os.environ['IOS_INFO_PLIST'])
+          assets_dir = Path(os.environ['IOS_ASSETS_DIR'])
 
           icon_map = {
-              'Seal': {
-                  'folder': 'seal',
-                  'iphone': {
-                      'ministar-seal@2x.png': 'ministar-seal-120.png',
-                      'ministar-seal@3x.png': 'ministar-seal-180.png',
-                  },
-                  'ipad': {
-                      'ministar-seal-ipad@2x.png': 'ministar-seal-152.png',
-                      'ministar-seal-ipad-pro@2x.png': 'ministar-seal-167.png',
-                  },
-              },
-              'Orbit': {
-                  'folder': 'orbit',
-                  'iphone': {
-                      'ministar-orbit@2x.png': 'ministar-orbit-120.png',
-                      'ministar-orbit@3x.png': 'ministar-orbit-180.png',
-                  },
-                  'ipad': {
-                      'ministar-orbit-ipad@2x.png': 'ministar-orbit-152.png',
-                      'ministar-orbit-ipad-pro@2x.png': 'ministar-orbit-167.png',
-                  },
-              },
-              'Spark': {
-                  'folder': 'spark',
-                  'iphone': {
-                      'ministar-spark@2x.png': 'ministar-spark-120.png',
-                      'ministar-spark@3x.png': 'ministar-spark-180.png',
-                  },
-                  'ipad': {
-                      'ministar-spark-ipad@2x.png': 'ministar-spark-152.png',
-                      'ministar-spark-ipad-pro@2x.png': 'ministar-spark-167.png',
-                  },
-              },
+              'Seal': ('seal', [
+                  ('Icon-60@2x.png', 'ministar-seal-120.png', 'iphone', '60x60', '2x'),
+                  ('Icon-60@3x.png', 'ministar-seal-180.png', 'iphone', '60x60', '3x'),
+                  ('Icon-76@2x.png', 'ministar-seal-152.png', 'ipad', '76x76', '2x'),
+                  ('Icon-83.5@2x.png', 'ministar-seal-167.png', 'ipad', '83.5x83.5', '2x'),
+              ]),
+              'Orbit': ('orbit', [
+                  ('Icon-60@2x.png', 'ministar-orbit-120.png', 'iphone', '60x60', '2x'),
+                  ('Icon-60@3x.png', 'ministar-orbit-180.png', 'iphone', '60x60', '3x'),
+                  ('Icon-76@2x.png', 'ministar-orbit-152.png', 'ipad', '76x76', '2x'),
+                  ('Icon-83.5@2x.png', 'ministar-orbit-167.png', 'ipad', '83.5x83.5', '2x'),
+              ]),
+              'Spark': ('spark', [
+                  ('Icon-60@2x.png', 'ministar-spark-120.png', 'iphone', '60x60', '2x'),
+                  ('Icon-60@3x.png', 'ministar-spark-180.png', 'iphone', '60x60', '3x'),
+                  ('Icon-76@2x.png', 'ministar-spark-152.png', 'ipad', '76x76', '2x'),
+                  ('Icon-83.5@2x.png', 'ministar-spark-167.png', 'ipad', '83.5x83.5', '2x'),
+              ]),
           }
 
-          for icon_name, spec in icon_map.items():
-              folder = alt_src / spec['folder']
-              for files in (spec['iphone'], spec['ipad']):
-                  for target_name, source_name in files.items():
-                      source = folder / source_name
-                      target = ios_app_dir / target_name
-                      shutil.copy2(source, target)
-
-          with info_plist.open('rb') as fp:
-              plist = plistlib.load(fp)
-
-          iphone_alternate_icons = {
-              icon_name: {
-                  "CFBundleIconFiles": [f"ministar-{spec['folder']}"],
-                  "UIPrerenderedIcon": False,
+          for icon_name, (folder_key, entries) in icon_map.items():
+              iconset_dir = assets_dir / f"{icon_name}.appiconset"
+              iconset_dir.mkdir(parents=True, exist_ok=True)
+              images = []
+              for target_name, source_name, idiom, size, scale in entries:
+                  source = alt_src / folder_key / source_name
+                  target = iconset_dir / target_name
+                  shutil.copy2(source, target)
+                  images.append({
+                      "filename": target_name,
+                      "idiom": idiom,
+                      "size": size,
+                      "scale": scale,
+                  })
+              contents = {
+                  "images": images,
+                  "info": {"version": 1, "author": "xcode"},
               }
-              for icon_name, spec in icon_map.items()
-          }
-          ipad_alternate_icons = {
-              icon_name: {
-                  "CFBundleIconFiles": [
-                      f"ministar-{spec['folder']}",
-                      f"ministar-{spec['folder']}-ipad",
-                      f"ministar-{spec['folder']}-ipad-pro",
-                  ],
-                  "UIPrerenderedIcon": False,
-              }
-              for icon_name, spec in icon_map.items()
-          }
+              (iconset_dir / "Contents.json").write_text(
+                  json.dumps(contents, ensure_ascii=False, indent=2) + "\n",
+                  encoding="utf-8",
+              )
 
-          plist.setdefault("CFBundleIcons", {})["CFBundleAlternateIcons"] = iphone_alternate_icons
-          plist.setdefault("CFBundleIcons~ipad", {})["CFBundleAlternateIcons"] = ipad_alternate_icons
-
-          with info_plist.open('wb') as fp:
-              plistlib.dump(plist, fp)
-
-          print("Injected alternate icons into", ios_app_dir)
-          print("Patched", info_plist)
+          print("Injected alternate appiconsets into", assets_dir)
           PY
           ruby - <<'RUBY'
           require 'xcodeproj'
-          require 'pathname'
 
           project_path = ENV.fetch('IOS_XCODEPROJ')
-          ios_app_dir = Pathname.new(ENV.fetch('IOS_APP_DIR'))
           project = Xcodeproj::Project.open(project_path)
-          target = project.targets.find { |t| t.name.end_with?('_iOS') } || project.targets.first
-          resources = target.resources_build_phase
-          project_dir = Pathname.new(File.dirname(project_path))
-          group = project.main_group.find_subpath('AlternateIcons', true)
+          alternate_names = 'Seal Orbit Spark'
 
-          icon_files = %w[
-            ministar-seal@2x.png
-            ministar-seal@3x.png
-            ministar-seal-ipad@2x.png
-            ministar-seal-ipad-pro@2x.png
-            ministar-orbit@2x.png
-            ministar-orbit@3x.png
-            ministar-orbit-ipad@2x.png
-            ministar-orbit-ipad-pro@2x.png
-            ministar-spark@2x.png
-            ministar-spark@3x.png
-            ministar-spark-ipad@2x.png
-            ministar-spark-ipad-pro@2x.png
-          ]
+          project.build_configurations.each do |config|
+            config.build_settings['ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS'] = 'YES'
+            config.build_settings['ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES'] = alternate_names
+          end
 
-          icon_files.each do |name|
-            absolute = ios_app_dir.join(name)
-            relative = absolute.relative_path_from(project_dir).to_s
-            ref = group.files.find { |f| f.path == relative } || group.new_file(relative)
-            unless resources.files_references.any? { |f| f.path == ref.path }
-              resources.add_file_reference(ref, true)
+          project.targets.each do |target|
+            target.build_configurations.each do |config|
+              config.build_settings['ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS'] = 'YES'
+              config.build_settings['ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES'] = alternate_names
             end
           end
 
           project.save
-          puts "Added alternate icons to Xcode resources: #{project_path}"
+          puts "Configured alternate appiconsets in Xcode build settings: #{project_path}"
           RUBY
 
       - name: Locate manual signing assets

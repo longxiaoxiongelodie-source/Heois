@@ -87,10 +87,7 @@ textarea {
 }
 
 #mobile-chat-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   z-index: 90;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 42px;
@@ -185,7 +182,7 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: calc(74px + env(safe-area-inset-top)) 8px calc(128px + env(safe-area-inset-bottom));
+  padding: 10px 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -370,10 +367,8 @@ textarea {
 }
 
 #mobile-input-dock {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  flex: 0 0 auto;
   padding: 10px 8px calc(12px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(16, 21, 34, 0.04), rgba(16, 21, 34, 0.72) 30%, rgba(16, 21, 34, 0.95));
   z-index: 85;

@@ -1585,9 +1585,6 @@ function syncMobileViewport() {
   root.style.setProperty('--mobile-vv-top', '0px');
   root.style.setProperty('--mobile-kb-offset', `${keyboardOffset}px`);
   body?.classList.toggle('keyboard-open', keyboardOffset > 24);
-  if (keyboardOffset > 24) {
-    window.scrollTo(0, 0);
-  }
 }
 
 function toggleFavoriteModel(providerId, modelName) {

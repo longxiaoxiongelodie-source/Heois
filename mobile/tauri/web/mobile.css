@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --mobile-kb-offset: 0px;
   --mobile-picker-width: min(84vw, 360px);
   --mobile-bg: #12172a;
   --mobile-panel: #18203a;
@@ -182,7 +183,7 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 10px 8px 10px;
+  padding: 10px 8px calc(118px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -367,17 +368,21 @@ textarea {
 }
 
 #mobile-input-dock {
-  position: relative;
-  flex: 0 0 auto;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   padding: 10px 8px calc(12px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(16, 21, 34, 0.04), rgba(16, 21, 34, 0.72) 30%, rgba(16, 21, 34, 0.95));
   z-index: 85;
+  transform: translateY(calc(-1 * var(--mobile-kb-offset)));
+  transition: transform 0.16s ease;
 }
 
 #mobile-scroll-bottom-btn {
   position: fixed;
   right: 18px;
-  bottom: calc(118px + env(safe-area-inset-bottom));
+  bottom: calc(118px + env(safe-area-inset-bottom) + var(--mobile-kb-offset));
   z-index: 70;
   width: 42px;
   height: 42px;

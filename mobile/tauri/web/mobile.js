@@ -1568,13 +1568,16 @@ function closeSheet(id) {
 }
 
 function syncMobileViewport() {
+  const root = document.documentElement;
   const body = document.body;
   const viewport = window.visualViewport;
-  if (!viewport) {
+  if (!root || !viewport) {
+    root?.style?.setProperty('--mobile-kb-offset', '0px');
     body?.classList.remove('keyboard-open');
     return;
   }
   const keyboardOffset = Math.max(0, Math.round((window.innerHeight || 0) - (viewport.height + viewport.offsetTop)));
+  root.style.setProperty('--mobile-kb-offset', `${keyboardOffset > 24 ? keyboardOffset : 0}px`);
   body?.classList.toggle('keyboard-open', keyboardOffset > 24);
 }
 

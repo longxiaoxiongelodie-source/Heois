@@ -780,8 +780,12 @@ function renderPicker() {
     wrap.innerHTML = '<div class="mobile-empty-state">没有匹配到会话或文件夹。</div>';
   }
 
-  document.getElementById('mobile-timeline-now-btn').classList.toggle('active', mobileState.timelineMode === 'now');
-  document.getElementById('mobile-timeline-old-btn').classList.toggle('active', mobileState.timelineMode === 'oldtimes');
+  const timelineToggleBtn = document.getElementById('mobile-timeline-toggle-btn');
+  if (timelineToggleBtn) {
+    timelineToggleBtn.classList.toggle('active', mobileState.timelineMode === 'now');
+    timelineToggleBtn.textContent = mobileState.timelineMode === 'oldtimes' ? '∿' : '≈';
+    timelineToggleBtn.title = mobileState.timelineMode === 'oldtimes' ? '切换到现在' : '切换到旧时光';
+  }
 }
 
 function svgLabelDataUrl(text, {
@@ -2047,8 +2051,9 @@ function bindEvents() {
     closeSheet('mobile-message-more-sheet');
     await deleteMobileMessage(msg.id);
   });
-  document.getElementById('mobile-timeline-now-btn').addEventListener('click', () => setTimelineMode('now'));
-  document.getElementById('mobile-timeline-old-btn').addEventListener('click', () => setTimelineMode('oldtimes'));
+  document.getElementById('mobile-timeline-toggle-btn').addEventListener('click', () => {
+    setTimelineMode(mobileState.timelineMode === 'oldtimes' ? 'now' : 'oldtimes');
+  });
   document.getElementById('mobile-settings-timeline-toggle').addEventListener('click', () => {
     setTimelineMode(mobileState.timelineMode === 'oldtimes' ? 'now' : 'oldtimes');
   });

@@ -52,6 +52,17 @@ function showToast(message) {
   mobileState.toastTimer = window.setTimeout(() => el.classList.remove('show'), 1800);
 }
 
+function showChatPostEffects(result) {
+  const parts = [];
+  const globalCount = Array.isArray(result?.saved_memories) ? result.saved_memories.length : 0;
+  const sessionCount = Array.isArray(result?.saved_session_memories) ? result.saved_session_memories.length : 0;
+  const scribe = result?.scribe || {};
+  if (globalCount > 0) parts.push(`长期记忆 +${globalCount}`);
+  if (sessionCount > 0) parts.push(`临时记事本 +${sessionCount}`);
+  if (scribe.updated) parts.push(`Scribe 已更新到 ${scribe.pair_count} 对`);
+  if (parts.length) showToast(parts.join(' · '));
+}
+
 function getTauriInvoke() {
   return window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke || null;
 }
@@ -1701,7 +1712,7 @@ async function performChat(conv) {
   let fullContent = '';
 
   try {
-    const usage = await callBackendChat(buildRequestMessages(conv), (delta) => {
+    const result = await callBackendChat(buildRequestMessages(conv), (delta) => {
       fullContent += delta;
       renderStreamingContent(stream, fullContent);
       scrollMessagesToBottom(false);
@@ -1710,12 +1721,13 @@ async function performChat(conv) {
 
     const assistantMsg = createMessage('assistant', fullContent, {
       model: mobileState.settings?.taskModels?.chat?.modelName || '',
-      usage: usage?.usage || null,
+      usage: result?.usage || null,
     });
     conv.messages.push(assistantMsg);
     stream.item.remove();
     renderMessages();
     await saveConversations();
+    showChatPostEffects(result);
   } catch (err) {
     stream.bubble.innerHTML = `<p>${escHtml(err.message)}</p>`;
     stream.item.classList.add('error');
@@ -1752,7 +1764,13 @@ async function callBackendChat(requestMessages, onDelta, conversationId) {
         onDelta(payload.data || '');
       } else if (payload.type === 'done') {
         mobileState.activeWs = null;
-        resolve({ usage: payload.usage || null, cancelled: !!payload.cancelled });
+        resolve({
+          usage: payload.usage || null,
+          cancelled: !!payload.cancelled,
+          saved_memories: payload.saved_memories || [],
+          saved_session_memories: payload.saved_session_memories || [],
+          scribe: payload.scribe || { updated: false, pair_count: 0 },
+        });
       } else if (payload.type === 'error') {
         mobileState.activeWs = null;
         reject(new Error(payload.message || '未知错误'));

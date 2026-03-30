@@ -18,12 +18,20 @@ const mobileState = {
   messageDeleteConfirm: false,
   drag: null,
   modelFavorites: JSON.parse(localStorage.getItem('start-mobile-model-favorites') || '[]'),
+  appIconChoice: localStorage.getItem('ministar-app-icon-choice') || 'default',
 };
 
 let mobileTtsAudio = null;
 let mobileTtsActiveBtn = null;
 let mobileTtsObjectUrl = null;
 const MOBILE_SHEET_TRANSITION_MS = 240;
+const MOBILE_APP_ICON_KEY = 'ministar-app-icon-choice';
+const MOBILE_APP_ICON_OPTIONS = [
+  { key: 'default', native: null, label: '现行', desc: '当前主图标，沿用现在这版。', preview: 'ministar-icon-default.png' },
+  { key: 'seal', native: 'Seal', label: '徽记', desc: '更收束的印记感，像正式徽标。', preview: 'ministar-icon-seal.png' },
+  { key: 'orbit', native: 'Orbit', label: '轨页', desc: '书页和轨道感更明显，偏叙事。', preview: 'ministar-icon-orbit.png' },
+  { key: 'spark', native: 'Spark', label: '星窗', desc: '更轻快，也更像移动入口。', preview: 'ministar-icon-spark.png' },
+];
 
 function escHtml(text = '') {
   return String(text)
@@ -41,6 +49,72 @@ function showToast(message) {
   el.classList.add('show');
   window.clearTimeout(mobileState.toastTimer);
   mobileState.toastTimer = window.setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function getTauriInvoke() {
+  return window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke || null;
+}
+
+function getCurrentAppIconOption() {
+  return MOBILE_APP_ICON_OPTIONS.find(item => item.key === mobileState.appIconChoice) || MOBILE_APP_ICON_OPTIONS[0];
+}
+
+async function syncAppIconChoiceFromShell() {
+  const invoke = getTauriInvoke();
+  if (!invoke) return;
+  try {
+    const nativeName = await invoke('get_current_app_icon');
+    const option = MOBILE_APP_ICON_OPTIONS.find(item => item.native === (nativeName || null));
+    if (option) {
+      mobileState.appIconChoice = option.key;
+      localStorage.setItem(MOBILE_APP_ICON_KEY, option.key);
+    }
+  } catch (err) {
+    console.warn('[Mobile] 获取当前 app 图标失败：', err?.message || err);
+  }
+}
+
+function renderAppIconSheet() {
+  const list = document.getElementById('mobile-app-icon-list');
+  if (!list) return;
+  list.innerHTML = '';
+  MOBILE_APP_ICON_OPTIONS.forEach(option => {
+    const btn = document.createElement('button');
+    btn.className = `mobile-app-icon-option${option.key === mobileState.appIconChoice ? ' active' : ''}`;
+    btn.innerHTML = `
+      <img class="mobile-app-icon-preview" src="${escHtml(option.preview)}" alt="${escHtml(option.label)}">
+      <div class="mobile-app-icon-copy">
+        <div class="mobile-app-icon-name">${escHtml(option.label)}</div>
+        <div class="mobile-app-icon-desc">${escHtml(option.desc)}</div>
+      </div>
+      <div class="mobile-app-icon-check">✓</div>
+    `;
+    btn.addEventListener('click', async () => {
+      await applyAppIconChoice(option.key);
+    });
+    list.appendChild(btn);
+  });
+}
+
+async function applyAppIconChoice(iconKey, { silent = false } = {}) {
+  const option = MOBILE_APP_ICON_OPTIONS.find(item => item.key === iconKey);
+  if (!option) return;
+  const invoke = getTauriInvoke();
+  if (invoke) {
+    try {
+      await invoke('set_app_icon', { iconName: option.native });
+    } catch (err) {
+      showToast(`切换失败：${err?.message || err}`);
+      return;
+    }
+  } else if (!silent) {
+    showToast('当前环境暂不支持切换主屏图标');
+  }
+  mobileState.appIconChoice = option.key;
+  localStorage.setItem(MOBILE_APP_ICON_KEY, option.key);
+  updateSettingsSheet();
+  renderAppIconSheet();
+  if (!silent) showToast(`已切换为${option.label}`);
 }
 
 function readFileAsDataUrl(file) {
@@ -634,6 +708,31 @@ function renderPicker() {
   document.getElementById('mobile-timeline-old-btn').classList.toggle('active', mobileState.timelineMode === 'oldtimes');
 }
 
+function svgLabelDataUrl(text, {
+  width = 640,
+  height = 26,
+  fontSize = 16,
+  fontWeight = 600,
+  color = '#ecf2ff',
+} = {}) {
+  const safeText = String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const y = Math.round(height * 0.74);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><text x="0" y="${y}" fill="${color}" font-size="${fontSize}" font-weight="${fontWeight}" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">${safeText}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function buildHistoryLabelMarkup(title, sub) {
+  return `
+    <img class="mobile-history-line mobile-history-line-title" alt="" draggable="false" src="${svgLabelDataUrl(title, { height: 28, fontSize: 16, fontWeight: 600, color: '#ecf2ff' })}">
+    <img class="mobile-history-line mobile-history-line-sub" alt="" draggable="false" src="${svgLabelDataUrl(sub, { height: 22, fontSize: 12, fontWeight: 500, color: 'rgba(224, 233, 255, 0.62)' })}">
+  `;
+}
+
 function buildHistoryButton(conv, groupName = '') {
   const btn = document.createElement('button');
   btn.className = `mobile-history-item${conv.id === mobileState.currentId ? ' active' : ''}`;
@@ -641,10 +740,7 @@ function buildHistoryButton(conv, groupName = '') {
   btn.dataset.convId = conv.id;
   btn.dataset.folderId = folder?.id || '';
   const count = Array.isArray(conv.messages) ? conv.messages.length : 0;
-  btn.innerHTML = `
-    <div class="mobile-history-title">${escHtml(conv.title || '新对话')}</div>
-    <div class="mobile-history-sub">${escHtml(groupName)} · ${count} 条消息</div>
-  `;
+  btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${groupName} · ${count} 条消息`);
   bindConversationInteractions(btn, conv);
   return btn;
 }
@@ -704,14 +800,11 @@ function renderMapSheet() {
   const finalItems = conv.messages.map((msg, index) => ({ msg, index }));
   finalItems.forEach(({ msg, index }) => {
     const btn = document.createElement('button');
-    btn.className = 'mobile-map-item';
-    const roleLabel = msg.role === 'user' ? '你' : '助手';
-    const summary = String(msg.content || '').replace(/\s+/g, ' ').trim().slice(0, 34) || `消息 ${index + 1}`;
+    const roleClass = msg.role === 'user' ? 'user' : 'assistant';
+    btn.className = `mobile-map-item ${roleClass}`;
+    const summary = String(msg.content || '').replace(/\s+/g, ' ').trim().slice(0, 36) || `消息 ${index + 1}`;
     btn.innerHTML = `
-      <div class="mobile-map-badge">${index + 1}</div>
-      <div class="mobile-map-copy">
-        <div class="mobile-map-title">${escHtml(`${roleLabel} · ${summary}`)}</div>
-      </div>
+      <div class="mobile-map-title">${escHtml(summary)}</div>
     `;
     btn.addEventListener('click', () => {
       const target = document.querySelector(`[data-message-index="${index}"]`);
@@ -742,10 +835,7 @@ function renderHistorySheet() {
     btn.dataset.convId = conv.id;
     btn.dataset.folderId = getConversationFolder(conv.id)?.id || '';
     const timeTag = isImportedConversation(conv) ? '旧时光' : '现在';
-    btn.innerHTML = `
-      <div class="mobile-model-title">${escHtml(conv.title || '新对话')}</div>
-      <div class="mobile-model-sub">${timeTag} · ${(conv.messages || []).length} 条消息</div>
-    `;
+    btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${timeTag} · ${(conv.messages || []).length} 条消息`);
     bindConversationInteractions(btn, conv, { fromHistorySheet: true });
     list.appendChild(btn);
   });
@@ -758,37 +848,61 @@ function bindConversationInteractions(element, conv, options = {}) {
   let longPressed = false;
   let dragging = false;
   let suppressClick = false;
+  let actionOpened = false;
 
   const clearTimer = () => {
     if (timer) window.clearTimeout(timer);
     timer = null;
   };
 
+  const setPickerInteracting = active => {
+    document.body?.classList.toggle('picker-interacting', active);
+    document.documentElement?.style.setProperty('-webkit-touch-callout', active ? 'none' : '');
+    if (!active) clearPickerSelection();
+  };
+
+  const setPressing = active => {
+    element.classList.toggle('is-pressing', active);
+  };
+
   element.addEventListener('touchstart', (event) => {
+    event.preventDefault();
+    setPickerInteracting(true);
+    setPressing(true);
     const touch = event.changedTouches[0];
     startX = touch?.clientX || 0;
     startY = touch?.clientY || 0;
     longPressed = false;
     dragging = false;
+    actionOpened = false;
     clearTimer();
     timer = window.setTimeout(() => {
       timer = null;
       longPressed = true;
-    }, 360);
-  }, { passive: true });
+      actionOpened = true;
+      suppressClick = true;
+      openConvActions(conv.id);
+    }, 220);
+  }, { passive: false });
 
   element.addEventListener('touchmove', (event) => {
+    if (actionOpened) {
+      event.preventDefault();
+      return;
+    }
     const touch = event.changedTouches[0];
     const dx = (touch?.clientX || 0) - startX;
     const dy = (touch?.clientY || 0) - startY;
     const dist = Math.hypot(dx, dy);
     if (!longPressed && dist > 10) {
       clearTimer();
+      setPressing(false);
       return;
     }
     if (longPressed && !dragging && dist > 12) {
       dragging = true;
       suppressClick = true;
+      setPressing(false);
       startConvDrag(conv.id, conv.title || '新对话', touch.clientX, touch.clientY);
     }
     if (dragging) {
@@ -799,25 +913,42 @@ function bindConversationInteractions(element, conv, options = {}) {
 
   element.addEventListener('touchend', (event) => {
     clearTimer();
+    setPressing(false);
     if (dragging) {
       finishConvDrag();
       dragging = false;
       longPressed = false;
+      actionOpened = false;
+      setPickerInteracting(false);
+      return;
+    }
+    if (actionOpened) {
+      event.preventDefault();
+      longPressed = false;
+      actionOpened = false;
+      setPickerInteracting(false);
+      window.setTimeout(() => { suppressClick = false; }, 0);
       return;
     }
     if (longPressed) {
+      event.preventDefault();
       openConvActions(conv.id);
       suppressClick = true;
     }
     longPressed = false;
+    actionOpened = false;
+    setPickerInteracting(false);
     window.setTimeout(() => { suppressClick = false; }, 0);
-  }, { passive: true });
+  }, { passive: false });
 
   element.addEventListener('touchcancel', () => {
     clearTimer();
     if (dragging) finishConvDrag();
     dragging = false;
     longPressed = false;
+    actionOpened = false;
+    setPressing(false);
+    setPickerInteracting(false);
   }, { passive: true });
 
   element.addEventListener('contextmenu', (event) => {
@@ -1155,6 +1286,8 @@ function updateSettingsSheet() {
   if (timelineEl) timelineEl.textContent = timelineLabel;
   const modelEl = document.getElementById('mobile-settings-model-sub');
   if (modelEl) modelEl.textContent = formatCurrentModelLabel();
+  const appIconEl = document.getElementById('mobile-settings-app-icon-sub');
+  if (appIconEl) appIconEl.textContent = getCurrentAppIconOption().label;
   const healthEl = document.getElementById('mobile-settings-health-sub');
   if (healthEl) healthEl.textContent = healthLabel;
 }
@@ -1306,6 +1439,17 @@ function closePicker() {
   document.getElementById('mobile-picker').classList.remove('open');
 }
 
+function clearPickerSelection() {
+  const picker = document.getElementById('mobile-picker');
+  const selection = window.getSelection?.();
+  if (!picker || !selection || !selection.rangeCount) return;
+  const anchorNode = selection.anchorNode;
+  const focusNode = selection.focusNode;
+  if ((anchorNode && picker.contains(anchorNode)) || (focusNode && picker.contains(focusNode))) {
+    selection.removeAllRanges();
+  }
+}
+
 function togglePicker() {
   if (mobileState.pickerOpen) closePicker();
   else openPicker();
@@ -1338,9 +1482,8 @@ function syncMobileViewport() {
     body?.classList.remove('keyboard-open');
     return;
   }
-  const top = Math.max(0, Math.round(viewport.offsetTop || 0));
-  const keyboardOffset = Math.max(0, Math.round((window.innerHeight || 0) - viewport.height - top));
-  root.style.setProperty('--mobile-vv-top', `${top}px`);
+  const keyboardOffset = Math.max(0, Math.round((window.innerHeight || 0) - viewport.height));
+  root.style.setProperty('--mobile-vv-top', '0px');
   root.style.setProperty('--mobile-kb-offset', `${keyboardOffset}px`);
   body?.classList.toggle('keyboard-open', keyboardOffset > 24);
 }
@@ -1593,12 +1736,15 @@ async function loadInitialData() {
     apiGetFolders(),
   ]);
   mobileState.settings = settings;
+  mobileState.appIconChoice = localStorage.getItem(MOBILE_APP_ICON_KEY) || 'default';
   mobileState.conversations = Array.isArray(conversations) ? conversations : [];
   mobileState.folders = Array.isArray(folders) ? folders : [];
+  await syncAppIconChoiceFromShell();
   applyTimelineSelection();
   renderMessages();
   renderPicker();
   updateSettingsSheet();
+  renderAppIconSheet();
   renderMobileUserIdentity();
   await loadModelCatalog();
 }
@@ -1619,6 +1765,23 @@ function setTimelineMode(mode) {
 }
 
 function bindEvents() {
+  const pickerEl = document.getElementById('mobile-picker');
+  pickerEl.addEventListener('touchstart', event => {
+    if (event.target.closest('input, textarea')) return;
+    event.preventDefault();
+    clearPickerSelection();
+  }, { passive: false });
+  pickerEl.addEventListener('contextmenu', event => {
+    if (event.target.closest('input, textarea')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearPickerSelection();
+  });
+  pickerEl.addEventListener('selectstart', event => {
+    if (event.target.closest('input, textarea')) return;
+    event.preventDefault();
+    clearPickerSelection();
+  });
   document.getElementById('mobile-picker-toggle').addEventListener('click', togglePicker);
   document.getElementById('mobile-chat-shell').addEventListener('click', () => {
     if (mobileState.pickerOpen) closePicker();
@@ -1635,6 +1798,11 @@ function bindEvents() {
   document.getElementById('mobile-history-sheet-close').addEventListener('click', () => closeSheet('mobile-history-sheet'));
   document.getElementById('mobile-settings-btn').addEventListener('click', () => openSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-sheet-close').addEventListener('click', () => closeSheet('mobile-settings-sheet'));
+  document.getElementById('mobile-settings-app-icon-trigger').addEventListener('click', () => {
+    renderAppIconSheet();
+    openSheet('mobile-app-icon-sheet');
+  });
+  document.getElementById('mobile-app-icon-sheet-close').addEventListener('click', () => closeSheet('mobile-app-icon-sheet'));
   document.getElementById('mobile-user-btn').addEventListener('click', openUserSheet);
   document.getElementById('mobile-user-sheet-close').addEventListener('click', () => closeSheet('mobile-user-sheet'));
   document.getElementById('mobile-settings-backend-trigger').addEventListener('click', () => openBackendSheet());
@@ -1792,6 +1960,7 @@ function bindEvents() {
     touchStartY = event.changedTouches[0]?.clientY || 0;
     touchStartTarget = event.target;
   }, { passive: true });
+  document.addEventListener('selectionchange', clearPickerSelection);
   document.addEventListener('touchend', (event) => {
     const touch = event.changedTouches[0];
     const touchEndX = touch?.clientX || 0;

@@ -99,70 +99,54 @@ workflows:
           set -euxo pipefail
           cd "$TAURI_APP_DIR"
           export ALT_ICON_SRC_DIR="$TAURI_SRC_DIR/icons/ios-alternate"
-          export IOS_ASSETS_DIR="$TAURI_SRC_DIR/gen/apple/Assets.xcassets"
           export IOS_APP_DIR="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -type d -name '*_iOS' | head -n 1)"
           export IOS_INFO_PLIST="$IOS_APP_DIR/Info.plist"
           python3 - <<'PY'
-          import json
           import os
           import plistlib
           import shutil
           from pathlib import Path
 
           alt_src = Path(os.environ['ALT_ICON_SRC_DIR'])
-          assets_dir = Path(os.environ['IOS_ASSETS_DIR'])
+          ios_app_dir = Path(os.environ['IOS_APP_DIR'])
           info_plist = Path(os.environ['IOS_INFO_PLIST'])
 
           icon_map = {
               'Seal': ('seal', {
-                  'Icon60x60@2x.png': 'ministar-seal-120.png',
-                  'Icon60x60@3x.png': 'ministar-seal-180.png',
-                  'Icon76x76@2x.png': 'ministar-seal-152.png',
-                  'Icon83.5x83.5@2x.png': 'ministar-seal-167.png',
+                  'ministar-seal-120': 'ministar-seal-120.png',
+                  'ministar-seal-152': 'ministar-seal-152.png',
+                  'ministar-seal-167': 'ministar-seal-167.png',
+                  'ministar-seal-180': 'ministar-seal-180.png',
               }),
               'Orbit': ('orbit', {
-                  'Icon60x60@2x.png': 'ministar-orbit-120.png',
-                  'Icon60x60@3x.png': 'ministar-orbit-180.png',
-                  'Icon76x76@2x.png': 'ministar-orbit-152.png',
-                  'Icon83.5x83.5@2x.png': 'ministar-orbit-167.png',
+                  'ministar-orbit-120': 'ministar-orbit-120.png',
+                  'ministar-orbit-152': 'ministar-orbit-152.png',
+                  'ministar-orbit-167': 'ministar-orbit-167.png',
+                  'ministar-orbit-180': 'ministar-orbit-180.png',
               }),
               'Spark': ('spark', {
-                  'Icon60x60@2x.png': 'ministar-spark-120.png',
-                  'Icon60x60@3x.png': 'ministar-spark-180.png',
-                  'Icon76x76@2x.png': 'ministar-spark-152.png',
-                  'Icon83.5x83.5@2x.png': 'ministar-spark-167.png',
+                  'ministar-spark-120': 'ministar-spark-120.png',
+                  'ministar-spark-152': 'ministar-spark-152.png',
+                  'ministar-spark-167': 'ministar-spark-167.png',
+                  'ministar-spark-180': 'ministar-spark-180.png',
               }),
-          }
-
-          contents_template = lambda: {
-              "images": [
-                  {"idiom": "iphone", "size": "60x60", "scale": "2x", "filename": "Icon60x60@2x.png"},
-                  {"idiom": "iphone", "size": "60x60", "scale": "3x", "filename": "Icon60x60@3x.png"},
-                  {"idiom": "ipad", "size": "76x76", "scale": "2x", "filename": "Icon76x76@2x.png"},
-                  {"idiom": "ipad", "size": "83.5x83.5", "scale": "2x", "filename": "Icon83.5x83.5@2x.png"},
-              ],
-              "info": {"version": 1, "author": "xcode"},
           }
 
           for icon_name, (folder_key, files) in icon_map.items():
-              appiconset = assets_dir / f"{icon_name}.appiconset"
-              appiconset.mkdir(parents=True, exist_ok=True)
-              for target_name, source_name in files.items():
-                  shutil.copy2(alt_src / folder_key / source_name, appiconset / target_name)
-              (appiconset / "Contents.json").write_text(
-                  json.dumps(contents_template(), ensure_ascii=False, indent=2) + "\n",
-                  encoding="utf-8",
-              )
+              for target_stem, source_name in files.items():
+                  source = alt_src / folder_key / source_name
+                  target = ios_app_dir / f"{target_stem}.png"
+                  shutil.copy2(source, target)
 
           with info_plist.open('rb') as fp:
               plist = plistlib.load(fp)
 
           alternate_icons = {
               icon_name: {
-                  "CFBundleIconFiles": [icon_name],
+                  "CFBundleIconFiles": list(files.keys()),
                   "UIPrerenderedIcon": False,
               }
-              for icon_name in icon_map
+              for icon_name, (_, files) in icon_map.items()
           }
 
           plist.setdefault("CFBundleIcons", {})["CFBundleAlternateIcons"] = alternate_icons
@@ -171,7 +155,7 @@ workflows:
           with info_plist.open('wb') as fp:
               plistlib.dump(plist, fp)
 
-          print("Injected alternate icons into", assets_dir)
+          print("Injected alternate icons into", ios_app_dir)
           print("Patched", info_plist)
           PY
 

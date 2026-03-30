@@ -872,7 +872,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 .mobile-sheet-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.54);
   opacity: 0;
   transition: opacity 0.22s ease;
 }
@@ -887,10 +887,10 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   flex-direction: column;
   gap: 10px;
   padding: 8px 14px calc(14px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(242, 245, 255, 0.98), rgba(231, 236, 250, 0.98));
-  color: #1c2340;
+  background: linear-gradient(180deg, rgba(22, 29, 51, 0.985), rgba(16, 22, 40, 0.985));
+  color: var(--mobile-text);
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -16px 40px rgba(4, 8, 18, 0.22);
+  box-shadow: 0 -18px 44px rgba(4, 8, 18, 0.38);
   transform: translateY(28px);
   opacity: 0;
   transition: transform 0.24s ease, opacity 0.24s ease;
@@ -910,7 +910,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   height: 5px;
   align-self: center;
   border-radius: 999px;
-  background: rgba(92, 106, 147, 0.35);
+  background: rgba(168, 182, 222, 0.26);
 }
 
 .mobile-sheet-head {
@@ -938,8 +938,8 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   border: none;
   border-radius: 16px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.78);
-  color: #1c2340;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mobile-text);
   text-align: left;
   cursor: pointer;
 }
@@ -960,8 +960,8 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   padding: 14px 16px;
   border: 1px solid rgba(95, 127, 199, 0.22);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #1c2340;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mobile-text);
   outline: none;
 }
 
@@ -987,9 +987,9 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   gap: 12px;
   border: 1px solid rgba(95, 127, 199, 0.18);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.06);
   padding: 12px 14px;
-  color: #1c2340;
+  color: var(--mobile-text);
   text-align: left;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
@@ -1002,7 +1002,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 .mobile-app-icon-option.active {
   border-color: rgba(95, 127, 199, 0.44);
   background: rgba(95, 127, 199, 0.12);
-  box-shadow: 0 8px 20px rgba(24, 35, 64, 0.1);
+  box-shadow: 0 8px 20px rgba(4, 8, 18, 0.18);
 }
 
 .mobile-app-icon-preview {
@@ -1024,13 +1024,13 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 .mobile-app-icon-name {
   font-size: 16px;
   font-weight: 700;
-  color: #1c2340;
+  color: var(--mobile-text);
 }
 
 .mobile-app-icon-desc {
   font-size: 12px;
   line-height: 1.4;
-  color: rgba(28, 35, 64, 0.66);
+  color: var(--mobile-muted);
 }
 
 .mobile-app-icon-check {
@@ -1062,8 +1062,8 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-sheet-secondary {
-  background: rgba(28, 35, 64, 0.08);
-  color: #1c2340;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mobile-text);
 }
 
 .mobile-empty-action-row {
@@ -1083,7 +1083,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 .mobile-map-sub {
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(28, 35, 64, 0.66);
+  color: var(--mobile-muted);
   pointer-events: none;
 }
 
@@ -1096,7 +1096,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   width: min(84%, 320px);
   padding: 11px 14px;
   border-radius: 18px;
-  background: rgba(244, 240, 255, 0.74);
+  background: rgba(255, 255, 255, 0.06);
   line-height: 1.28;
 }
 
@@ -1106,7 +1106,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 
 .mobile-map-item.user {
   align-self: flex-end;
-  background: rgba(238, 233, 255, 0.86);
+  background: rgba(95, 127, 199, 0.14);
 }
 
 .mobile-map-title {
@@ -1131,8 +1131,8 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   padding: 14px 16px;
   border: none;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.8);
-  color: #1c2340;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mobile-text);
   text-align: left;
   cursor: pointer;
   font-size: 16px;

@@ -246,6 +246,15 @@ function formatMobileDateTime(ts) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+function formatMobileDateOnly(ts) {
+  const value = Number(ts || 0);
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (num) => String(num).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function getMessageTokenCount(msg) {
   const total = Number(
     msg?.usage?.total_tokens
@@ -807,7 +816,8 @@ function buildHistoryButton(conv, groupName = '') {
   btn.dataset.convId = conv.id;
   btn.dataset.folderId = folder?.id || '';
   const count = Array.isArray(conv.messages) ? conv.messages.length : 0;
-  btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${groupName} · ${count} 条消息`);
+  const stamp = conv.updatedAt || conv.createdAt || conv.id || 0;
+  btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${formatMobileDateOnly(stamp)} · ${count} 条消息`);
   bindConversationInteractions(btn, conv);
   return btn;
 }
@@ -901,8 +911,8 @@ function renderHistorySheet() {
     btn.className = `mobile-history-sheet-item${conv.id === mobileState.currentId ? ' active' : ''}`;
     btn.dataset.convId = conv.id;
     btn.dataset.folderId = getConversationFolder(conv.id)?.id || '';
-    const timeTag = isImportedConversation(conv) ? '旧时光' : '现在';
-    btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${timeTag} · ${(conv.messages || []).length} 条消息`);
+    const stamp = conv.updatedAt || conv.createdAt || conv.id || 0;
+    btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${formatMobileDateOnly(stamp)} · ${(conv.messages || []).length} 条消息`);
     bindConversationInteractions(btn, conv, { fromHistorySheet: true });
     list.appendChild(btn);
   });

@@ -95,7 +95,7 @@ const _PROTO = typeof window !== 'undefined' && window.location?.protocol === 'h
   : 'http:';
 
 export function getDefaultBackendBaseUrl() {
-  return `${_PROTO}//${_HOST}:8000`;
+  return 'http://192.168.10.39:8000';
 }
 
 export function normalizeBackendBaseUrl(raw = '') {

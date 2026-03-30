@@ -376,7 +376,12 @@ textarea {
   background: linear-gradient(180deg, rgba(16, 21, 34, 0.04), rgba(16, 21, 34, 0.72) 30%, rgba(16, 21, 34, 0.95));
   z-index: 85;
   transform: translateY(calc(-1 * var(--mobile-kb-offset)));
+  will-change: transform;
   transition: transform 0.16s ease;
+}
+
+body.keyboard-open #mobile-input-dock {
+  padding-bottom: 6px;
 }
 
 #mobile-scroll-bottom-btn {

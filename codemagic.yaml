@@ -103,42 +103,56 @@ workflows:
           export IOS_XCODEPROJ="$(find "$TAURI_SRC_DIR/gen/apple" -maxdepth 2 -name '*.xcodeproj' | head -n 1)"
           python3 - <<'PY'
           import os
-          import shutil
           import json
+          import shutil
+          import subprocess
           from pathlib import Path
 
           alt_src = Path(os.environ['ALT_ICON_SRC_DIR'])
           assets_dir = Path(os.environ['IOS_ASSETS_DIR'])
 
           icon_map = {
-              'Seal': ('seal', [
-                  ('Icon-60@2x.png', 'ministar-seal-120.png', 'iphone', '60x60', '2x'),
-                  ('Icon-60@3x.png', 'ministar-seal-180.png', 'iphone', '60x60', '3x'),
-                  ('Icon-76@2x.png', 'ministar-seal-152.png', 'ipad', '76x76', '2x'),
-                  ('Icon-83.5@2x.png', 'ministar-seal-167.png', 'ipad', '83.5x83.5', '2x'),
-              ]),
-              'Orbit': ('orbit', [
-                  ('Icon-60@2x.png', 'ministar-orbit-120.png', 'iphone', '60x60', '2x'),
-                  ('Icon-60@3x.png', 'ministar-orbit-180.png', 'iphone', '60x60', '3x'),
-                  ('Icon-76@2x.png', 'ministar-orbit-152.png', 'ipad', '76x76', '2x'),
-                  ('Icon-83.5@2x.png', 'ministar-orbit-167.png', 'ipad', '83.5x83.5', '2x'),
-              ]),
-              'Spark': ('spark', [
-                  ('Icon-60@2x.png', 'ministar-spark-120.png', 'iphone', '60x60', '2x'),
-                  ('Icon-60@3x.png', 'ministar-spark-180.png', 'iphone', '60x60', '3x'),
-                  ('Icon-76@2x.png', 'ministar-spark-152.png', 'ipad', '76x76', '2x'),
-                  ('Icon-83.5@2x.png', 'ministar-spark-167.png', 'ipad', '83.5x83.5', '2x'),
-              ]),
+              'Seal': {'folder': 'seal'},
+              'Orbit': {'folder': 'orbit'},
+              'Spark': {'folder': 'spark'},
           }
 
-          for icon_name, (folder_key, entries) in icon_map.items():
+          icon_specs = [
+              ('Icon-20@2x.png', 40, 'iphone', '20x20', '2x'),
+              ('Icon-20@3x.png', 60, 'iphone', '20x20', '3x'),
+              ('Icon-29@2x.png', 58, 'iphone', '29x29', '2x'),
+              ('Icon-29@3x.png', 87, 'iphone', '29x29', '3x'),
+              ('Icon-40@2x.png', 80, 'iphone', '40x40', '2x'),
+              ('Icon-40@3x.png', 120, 'iphone', '40x40', '3x'),
+              ('Icon-60@2x.png', 120, 'iphone', '60x60', '2x'),
+              ('Icon-60@3x.png', 180, 'iphone', '60x60', '3x'),
+              ('Icon-20.png', 20, 'ipad', '20x20', '1x'),
+              ('Icon-20@2x-ipad.png', 40, 'ipad', '20x20', '2x'),
+              ('Icon-29.png', 29, 'ipad', '29x29', '1x'),
+              ('Icon-29@2x-ipad.png', 58, 'ipad', '29x29', '2x'),
+              ('Icon-40.png', 40, 'ipad', '40x40', '1x'),
+              ('Icon-40@2x-ipad.png', 80, 'ipad', '40x40', '2x'),
+              ('Icon-76.png', 76, 'ipad', '76x76', '1x'),
+              ('Icon-76@2x.png', 152, 'ipad', '76x76', '2x'),
+              ('Icon-83.5@2x.png', 167, 'ipad', '83.5x83.5', '2x'),
+          ]
+
+          for icon_name, spec in icon_map.items():
+              folder_key = spec['folder']
               iconset_dir = assets_dir / f"{icon_name}.appiconset"
               iconset_dir.mkdir(parents=True, exist_ok=True)
               images = []
-              for target_name, source_name, idiom, size, scale in entries:
-                  source = alt_src / folder_key / source_name
+              master = alt_src / folder_key / f"ministar-{folder_key}-180.png"
+              if not master.exists():
+                  raise FileNotFoundError(f"missing alternate icon master: {master}")
+              for target_name, pixel_size, idiom, size, scale in icon_specs:
                   target = iconset_dir / target_name
-                  shutil.copy2(source, target)
+                  subprocess.run(
+                      ["sips", "-z", str(pixel_size), str(pixel_size), str(master), "--out", str(target)],
+                      check=True,
+                      stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL,
+                  )
                   images.append({
                       "filename": target_name,
                       "idiom": idiom,

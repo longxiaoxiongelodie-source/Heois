@@ -1,5 +1,6 @@
 :root {
   color-scheme: dark;
+  --mobile-vh: 100vh;
   --mobile-vv-top: 0px;
   --mobile-kb-offset: 0px;
   --mobile-picker-width: min(84vw, 360px);
@@ -57,8 +58,8 @@ textarea {
 #mobile-app {
   position: relative;
   width: 100%;
-  height: 100vh;
-  min-height: 100vh;
+  height: var(--mobile-vh);
+  min-height: var(--mobile-vh);
   overflow: hidden;
 }
 
@@ -67,8 +68,8 @@ textarea {
   z-index: 40;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  min-height: 100vh;
+  height: var(--mobile-vh);
+  min-height: var(--mobile-vh);
   min-width: 0;
   min-height: 0;
   background: #101528;
@@ -168,7 +169,7 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: calc(88px + env(safe-area-inset-top)) 8px calc(140px + var(--mobile-kb-offset));
+  padding: calc(88px + env(safe-area-inset-top)) 8px calc(140px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -176,7 +177,7 @@ textarea {
 }
 
 body.keyboard-open #mobile-messages {
-  padding-bottom: calc(118px + var(--mobile-kb-offset));
+  padding-bottom: calc(108px + env(safe-area-inset-bottom));
 }
 
 .mobile-message {
@@ -360,7 +361,7 @@ body.keyboard-open #mobile-messages {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: var(--mobile-kb-offset);
+  bottom: 0;
   padding: 10px 8px calc(12px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, rgba(16, 21, 34, 0.04), rgba(16, 21, 34, 0.72) 30%, rgba(16, 21, 34, 0.95));
 }
@@ -372,7 +373,7 @@ body.keyboard-open #mobile-input-dock {
 #mobile-scroll-bottom-btn {
   position: fixed;
   right: 18px;
-  bottom: calc(118px + env(safe-area-inset-bottom) + var(--mobile-kb-offset));
+  bottom: calc(118px + env(safe-area-inset-bottom));
   z-index: 70;
   width: 42px;
   height: 42px;
@@ -393,7 +394,7 @@ body.keyboard-open #mobile-input-dock {
 }
 
 body.keyboard-open #mobile-scroll-bottom-btn {
-  bottom: calc(92px + var(--mobile-kb-offset));
+  bottom: calc(92px + env(safe-area-inset-bottom));
 }
 
 #mobile-scroll-bottom-btn.hidden {

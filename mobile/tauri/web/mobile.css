@@ -699,7 +699,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 
 .mobile-history-item {
   width: 100%;
-  padding: 9px 12px;
+  padding: 6px 12px;
   border: 1px solid transparent;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.03);
@@ -739,15 +739,15 @@ body.keyboard-open #mobile-scroll-bottom-btn {
 }
 
 .mobile-history-line + .mobile-history-line {
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .mobile-history-line-title {
-  height: 30px;
+  height: 24px;
 }
 
 .mobile-history-line-sub {
-  height: 18px;
+  height: 16px;
   opacity: 0.68;
 }
 

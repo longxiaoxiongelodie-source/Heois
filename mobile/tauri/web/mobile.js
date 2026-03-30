@@ -315,6 +315,11 @@ function clearMobileTtsPlaybackState() {
 function bindTapAction(element, handler) {
   if (!element) return;
   let touched = false;
+  const stop = (event) => {
+    event.stopPropagation();
+  };
+  element.addEventListener('touchstart', stop, { passive: true });
+  element.addEventListener('mousedown', stop);
   element.addEventListener('touchend', (event) => {
     touched = true;
     event.preventDefault();

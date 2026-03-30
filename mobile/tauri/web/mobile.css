@@ -90,7 +90,7 @@ textarea {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 20;
+  z-index: 90;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) 48px;
   align-items: center;
@@ -100,6 +100,7 @@ textarea {
   background: rgba(14, 20, 38, 0.82);
   backdrop-filter: blur(18px);
   box-shadow: 0 1px 0 rgba(122, 144, 198, 0.08);
+  pointer-events: auto;
 }
 
 .mobile-chat-header-center {
@@ -158,6 +159,9 @@ textarea {
   color: var(--mobile-text);
   font-size: 22px;
   cursor: pointer;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .mobile-icon-btn:hover {

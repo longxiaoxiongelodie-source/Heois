@@ -526,7 +526,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  padding: calc(14px + env(safe-area-inset-top)) 20px calc(14px + env(safe-area-inset-bottom));
   background: rgba(18, 24, 43, 0.98);
   border-right: 1px solid var(--mobile-border);
   box-shadow: 24px 0 40px rgba(4, 8, 18, 0.32);
@@ -624,6 +624,7 @@ body.keyboard-open #mobile-scroll-bottom-btn {
   flex-direction: column;
   gap: 12px;
   padding-right: 2px;
+  padding-left: 2px;
 }
 
 #mobile-picker-list.drag-root-over {

@@ -316,9 +316,11 @@ function bindTapAction(element, handler) {
   if (!element) return;
   let touched = false;
   const stop = (event) => {
+    event.preventDefault();
     event.stopPropagation();
   };
-  element.addEventListener('touchstart', stop, { passive: true });
+  element.addEventListener('touchstart', stop, { passive: false });
+  element.addEventListener('pointerdown', stop);
   element.addEventListener('mousedown', stop);
   element.addEventListener('touchend', (event) => {
     touched = true;
@@ -1841,6 +1843,7 @@ function setTimelineMode(mode) {
 
 function bindEvents() {
   const pickerEl = document.getElementById('mobile-picker');
+  const headerEl = document.getElementById('mobile-chat-header');
   pickerEl.addEventListener('touchstart', event => {
     if (event.target.closest('input, textarea')) return;
     clearPickerSelection();
@@ -1855,6 +1858,11 @@ function bindEvents() {
     if (event.target.closest('input, textarea')) return;
     event.preventDefault();
     clearPickerSelection();
+  });
+  ['click', 'touchstart', 'touchend', 'pointerdown', 'mousedown'].forEach(type => {
+    headerEl.addEventListener(type, event => {
+      event.stopPropagation();
+    }, { passive: type === 'touchstart' ? false : true });
   });
   bindTapAction(document.getElementById('mobile-picker-toggle'), () => togglePicker());
   document.getElementById('mobile-chat-shell').addEventListener('click', () => {

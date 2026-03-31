@@ -193,12 +193,17 @@ export function createMobileInputDockController(deps) {
           onDelta(payload.data || '');
         } else if (payload.type === 'done') {
           state.activeWs = null;
+          state._lastPromptSnapshot = payload.prompt_snapshot || null;
+          import('./settings.js')
+            .then(mod => mod.populateDebugSection?.())
+            .catch(() => {});
           resolve({
             usage: payload.usage || null,
             cancelled: !!payload.cancelled,
             saved_memories: payload.saved_memories || [],
             saved_session_memories: payload.saved_session_memories || [],
             scribe: payload.scribe || { updated: false, pair_count: 0 },
+            prompt_snapshot: payload.prompt_snapshot || null,
           });
         } else if (payload.type === 'error') {
           state.activeWs = null;
@@ -237,6 +242,25 @@ export function createMobileInputDockController(deps) {
       const assistantMsg = createMessage('assistant', fullContent, {
         model: state.settings?.taskModels?.chat?.modelName || '',
         usage: result?.usage || null,
+        meta: {
+          partnerTokens:
+            result?.usage?.total_tokens
+            ?? (
+              result?.usage?.prompt_tokens != null && result?.usage?.completion_tokens != null
+                ? Number(result.usage.prompt_tokens) + Number(result.usage.completion_tokens)
+                : result?.usage?.completion_tokens
+                ?? null
+            ),
+          tokens:
+            result?.usage?.total_tokens
+            ?? (
+              result?.usage?.prompt_tokens != null && result?.usage?.completion_tokens != null
+                ? Number(result.usage.prompt_tokens) + Number(result.usage.completion_tokens)
+                : result?.usage?.completion_tokens
+                ?? null
+            ),
+          scribeTokens: result?.scribe?.usage?.total_tokens ?? null,
+        },
       });
       conv.messages.push(assistantMsg);
       stream.item.remove();

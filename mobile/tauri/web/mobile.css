@@ -797,6 +797,16 @@ body.keyboard-open #mobile-input-dock {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.mobile-settings-danger {
+  border: 1px solid rgba(215, 75, 98, 0.22);
+  background: rgba(215, 75, 98, 0.08);
+}
+
+.mobile-settings-danger .mobile-model-title,
+.mobile-settings-danger .mobile-model-sub {
+  color: #f3b6c0;
+}
+
 .mobile-avatar-dot {
   width: 34px;
   height: 34px;

@@ -29,6 +29,8 @@ let mobileTtsActiveBtn = null;
 let mobileTtsObjectUrl = null;
 const MOBILE_SHEET_TRANSITION_MS = 240;
 const MOBILE_APP_ICON_KEY = 'ministar-app-icon-choice';
+const MOBILE_MODEL_FAVORITES_KEY = 'start-mobile-model-favorites';
+const MOBILE_COLLAPSED_FOLDERS_KEY = 'ministar-mobile-collapsed-folders';
 const MOBILE_APP_ICON_OPTIONS = [
   { key: 'default', native: null, label: '现行', desc: '当前主图标，沿用现在这版。', preview: 'ministar-icon-default.png' },
   { key: 'seal', native: 'Seal', label: '徽记', desc: '更收束的印记感，像正式徽标。', preview: 'ministar-icon-seal.png' },
@@ -216,7 +218,7 @@ function cleanAITitle(raw) {
 }
 
 function createMessage(role, content, extras = {}) {
-  return {
+  return normalizeMobileMessage({
     id: extras.id || `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     role,
     content,
@@ -225,7 +227,8 @@ function createMessage(role, content, extras = {}) {
     model: extras.model || '',
     usage: extras.usage || null,
     status: extras.status || 'done',
-  };
+    meta: extras.meta || {},
+  });
 }
 
 function formatMobileDateTime(ts) {
@@ -246,18 +249,48 @@ function formatMobileDateOnly(ts) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function getMessageTokenCount(msg) {
+function derivePartnerTokenCount(msg) {
   const total = Number(
     msg?.usage?.total_tokens
-    ?? msg?.meta?.tokens
     ?? (
       msg?.usage?.prompt_tokens != null && msg?.usage?.completion_tokens != null
         ? Number(msg.usage.prompt_tokens) + Number(msg.usage.completion_tokens)
         : msg?.usage?.completion_tokens
     )
+    ?? msg?.meta?.partnerTokens
+    ?? msg?.meta?.tokens
     ?? 0,
   );
   return Number.isFinite(total) && total > 0 ? total : 0;
+}
+
+function normalizeMobileMessage(msg) {
+  if (!msg || typeof msg !== 'object') return msg;
+  const meta = { ...(msg.meta || {}) };
+  if (msg.role === 'assistant') {
+    const partnerTokens = derivePartnerTokenCount({ ...msg, meta });
+    if (partnerTokens > 0) {
+      meta.partnerTokens = partnerTokens;
+      if (meta.tokens == null) meta.tokens = partnerTokens;
+    }
+    const scribeTokens = Number(meta.scribeTokens || 0);
+    if (Number.isFinite(scribeTokens) && scribeTokens > 0) {
+      meta.scribeTokens = scribeTokens;
+    } else {
+      delete meta.scribeTokens;
+    }
+  }
+  return { ...msg, meta };
+}
+
+function normalizeMobileConversation(conv) {
+  if (!conv || typeof conv !== 'object') return conv;
+  const messages = Array.isArray(conv.messages) ? conv.messages.map(normalizeMobileMessage) : [];
+  return { ...conv, messages };
+}
+
+function getMessageTokenCount(msg) {
+  return derivePartnerTokenCount(msg);
 }
 
 function formatMobileMetaInfo(msg) {
@@ -266,7 +299,9 @@ function formatMobileMetaInfo(msg) {
   if (timeText) parts.push(timeText);
   if (msg?.role === 'assistant') {
     const tokens = getMessageTokenCount(msg);
-    if (tokens) parts.push(`↓ ${tokens.toLocaleString()} tokens`);
+    if (tokens) parts.push(`Partner ${tokens.toLocaleString()} tokens`);
+    const scribeTokens = Number(msg?.meta?.scribeTokens || 0);
+    if (scribeTokens > 0) parts.push(`Scribe ${scribeTokens.toLocaleString()}tokens`);
   }
   return parts.join('  ');
 }
@@ -885,6 +920,46 @@ function updateSettingsSheet() {
   if (healthEl) healthEl.textContent = healthLabel;
 }
 
+function resetMobileCachedState() {
+  localStorage.removeItem(MOBILE_MODEL_FAVORITES_KEY);
+  localStorage.removeItem(MOBILE_APP_ICON_KEY);
+  localStorage.removeItem(MOBILE_COLLAPSED_FOLDERS_KEY);
+  try {
+    sessionStorage.clear();
+  } catch (_) {}
+  mobileState.modelFavorites = [];
+  mobileState.appIconChoice = 'default';
+  mobileState.collapsedFolders = new Set();
+  mobileState.search = '';
+  mobileState.activeConvActionId = null;
+  mobileState.activeMessageActionId = null;
+  mobileState.messageDeleteConfirm = false;
+  mobileState.drag = null;
+  mobileState._lastPromptSnapshot = null;
+}
+
+function requestClearMobileCache() {
+  const btn = document.getElementById('mobile-settings-clear-cache-btn');
+  if (!btn) return;
+  const titleEl = btn.querySelector('.mobile-model-title');
+  const subEl = btn.querySelector('.mobile-model-sub');
+  if (!btn.dataset.confirming) {
+    btn.dataset.confirming = '1';
+    if (titleEl) titleEl.textContent = '确认清手机端缓存';
+    if (subEl) subEl.textContent = '再次点按后立即清空并刷新当前页面';
+    window.setTimeout(() => {
+      if (!btn.dataset.confirming) return;
+      delete btn.dataset.confirming;
+      if (titleEl) titleEl.textContent = '清手机端缓存';
+      if (subEl) subEl.textContent = '只清本机收藏、折叠与临时状态，不删除后端对话数据';
+    }, 2200);
+    return;
+  }
+  resetMobileCachedState();
+  showToast('手机端缓存已清空，正在刷新');
+  window.setTimeout(() => window.location.reload(), 180);
+}
+
 function renderMobileUserIdentity() {
   const name = String(mobileState.settings?.userName || '').trim() || '用户';
   const avatarSrc = String(mobileState.settings?.userAvatar || '');
@@ -1111,11 +1186,11 @@ async function loadInitialData() {
   const [settings, conversations, folders] = await Promise.all([
     apiGetSettings(),
     apiGetConversations(),
-    apiGetFolders(),
+    apiGetFolders(mobileState.timelineMode || 'now'),
   ]);
   mobileState.settings = settings;
   mobileState.appIconChoice = localStorage.getItem(MOBILE_APP_ICON_KEY) || 'default';
-  mobileState.conversations = Array.isArray(conversations) ? conversations : [];
+  mobileState.conversations = Array.isArray(conversations) ? conversations.map(normalizeMobileConversation) : [];
   mobileState.folders = Array.isArray(folders) ? folders : [];
   await syncAppIconChoiceFromShell();
   applyTimelineSelection();
@@ -1133,9 +1208,10 @@ function applyTimelineSelection() {
   mobileState.currentId = getTimelineConversations()[0]?.id || null;
 }
 
-function setTimelineMode(mode) {
+async function setTimelineMode(mode) {
   if (mode !== 'now' && mode !== 'oldtimes') return;
   mobileState.timelineMode = mode;
+  mobileState.folders = await apiGetFolders(mobileState.timelineMode || 'now').catch(() => []);
   applyTimelineSelection();
   renderPicker();
   renderMessages();
@@ -1181,6 +1257,7 @@ function bindEvents() {
   document.getElementById('mobile-history-sheet-close').addEventListener('click', () => closeSheet('mobile-history-sheet'));
   bindTapAction(document.getElementById('mobile-settings-btn'), () => openSheet('mobile-settings-sheet'));
   document.getElementById('mobile-settings-sheet-close').addEventListener('click', () => closeSheet('mobile-settings-sheet'));
+  document.getElementById('mobile-settings-clear-cache-btn').addEventListener('click', requestClearMobileCache);
   document.getElementById('mobile-settings-app-icon-trigger').addEventListener('click', () => {
     renderAppIconSheet();
     openSheet('mobile-app-icon-sheet');

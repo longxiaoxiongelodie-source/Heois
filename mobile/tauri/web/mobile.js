@@ -756,6 +756,7 @@ function getMobileInputDockController() {
     mobileInputDockController = createMobileInputDockController({
       apiChat,
       state: mobileState,
+      bindTapAction,
       escHtml,
       showToast,
       getChatRouteMeta,

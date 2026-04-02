@@ -3,6 +3,7 @@ export function createMobileInputDockController(deps) {
     apiChat,
     apiStreamChat,
     state,
+    bindTapAction,
     escHtml,
     showToast,
     getChatRouteMeta,
@@ -583,8 +584,8 @@ export function createMobileInputDockController(deps) {
   }
 
   function bindEvents() {
-    document.getElementById('mobile-send-btn')?.addEventListener('click', sendMessage);
-    document.getElementById('mobile-extra-btn')?.addEventListener('click', toggleExtraMenu);
+    bindTapAction(document.getElementById('mobile-send-btn'), sendMessage);
+    bindTapAction(document.getElementById('mobile-extra-btn'), toggleExtraMenu);
     document.getElementById('mobile-attach-btn')?.addEventListener('click', openAttachmentPicker);
     document.getElementById('mobile-new-chat-inline-btn')?.addEventListener('click', createInlineConversation);
     document.getElementById('mobile-clear-context-btn')?.addEventListener('click', clearContext);

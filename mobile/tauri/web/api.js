@@ -113,11 +113,24 @@ export async function apiChat(payload, options = {}) {
 // ── 核心 HTTP 工具 ────────────────────────────────────────────
 
 export async function fetchJsonOrThrow(url, options = {}) {
+  const timeoutMs = Number(options?.timeout_ms || 0);
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(new DOMException('timeout', 'AbortError')), timeoutMs)
+    : null;
+  const fetchOptions = controller
+    ? { ...options, signal: options.signal || controller.signal }
+    : options;
   let resp;
   try {
-    resp = await fetch(url, options);
+    resp = await fetch(url, fetchOptions);
   } catch (err) {
+    if (err?.name === 'AbortError' && timeoutMs > 0) {
+      throw new Error(`请求超时（>${timeoutMs}ms）`);
+    }
     throw new Error(describeNetworkError(err, url));
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
   }
   let body;
   try {
@@ -273,7 +286,7 @@ export async function apiStreamChat(payload, onEvent, options = {}) {
 // ── Settings ──────────────────────────────────────────────────
 
 export function apiGetSettings() {
-  return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/settings');
+  return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/settings', { timeout_ms: 8000 });
 }
 export function apiGetSecurityPolicy() {
   return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/security-policy');
@@ -312,7 +325,7 @@ export function apiGetConversations() {
   return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/conversations');
 }
 export function apiGetConversationIndex() {
-  return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/conversations/index');
+  return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/conversations/index', { timeout_ms: 8000 });
 }
 export function apiGetConversationShards() {
   return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/conversations/shards');
@@ -394,7 +407,7 @@ export function apiSavePartnerMidMemory(partnerMidMemory) {
 // ── Folders ───────────────────────────────────────────────────
 
 export function apiGetFolders(scope = 'now') {
-  return fetchJsonOrThrow(`${BACKEND_BASE_URL}/api/folders?scope=${encodeURIComponent(scope)}`);
+  return fetchJsonOrThrow(`${BACKEND_BASE_URL}/api/folders?scope=${encodeURIComponent(scope)}`, { timeout_ms: 8000 });
 }
 export function apiCreateFolder(name, parentId = null, scope = 'now') {
   return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/folders', {
@@ -632,7 +645,7 @@ export async function apiSynthesizeTts(text) {
 }
 
 export async function apiCheckHealth(baseUrl = BACKEND_BASE_URL) {
-  return fetchJsonOrThrow(`${baseUrl}/api/health`);
+  return fetchJsonOrThrow(`${baseUrl}/api/health`, { timeout_ms: 4000 });
 }
 
 // ── Memory ────────────────────────────────────────────────────

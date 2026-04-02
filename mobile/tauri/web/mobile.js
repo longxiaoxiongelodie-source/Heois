@@ -928,6 +928,11 @@ function updateSettingsSheet() {
   if (buildEl) buildEl.textContent = MOBILE_BUILD_STAMP;
 }
 
+function renderBuildStampImmediately() {
+  const buildEl = document.getElementById('mobile-settings-build-sub');
+  if (buildEl) buildEl.textContent = MOBILE_BUILD_STAMP;
+}
+
 function resetMobileCachedState() {
   localStorage.removeItem(MOBILE_MODEL_FAVORITES_KEY);
   localStorage.removeItem(MOBILE_APP_ICON_KEY);
@@ -1446,6 +1451,8 @@ function bindEvents() {
 async function init() {
   bindEvents();
   populateBackendInput();
+  renderBuildStampImmediately();
+  updateSettingsSheet();
   getMobileInputDockController().init();
 
   try {

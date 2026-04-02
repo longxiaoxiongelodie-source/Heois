@@ -4,13 +4,18 @@ export const state = {
   settings: {
     // 多供应商：{ provider_id: { name, apiBaseUrl, apiKey, providerType } }
     providers: {},
-    // 全局默认模型名（兼容字段，实际通过 taskModels 管理）
-    modelName:    '',
     systemPrompt: '',
     userName:     '',
     assistantName: '',
     taggerSystemPrompt:    '',
     scribeSystemPrompt:    '',
+    midSystemPrompt:       '',
+    scribeEchoes: {
+      scanner: true,
+      atree: true,
+      utree: true,
+      rtree: true,
+    },
     readerSystemPrompt:    '',
     archivistSystemPrompt: '',
     mergeSystemPrompt:     '',
@@ -25,6 +30,7 @@ export const state = {
       merge:     { enabled: true, slot: 'title', temperature: 0.35, top_p: 0.9 },
       scribe:    { enabled: true, slot: 'archivist', temperature: 0.3, top_p: 0.85 },
       reader:    { enabled: true, slot: 'archivist', temperature: 0.5, top_p: 0.9 },
+      mid:       { enabled: false, slot: 'archivist', temperature: 0.35, top_p: 0.85 },
       archivist: { enabled: true, slot: 'archivist', temperature: 0.2, top_p: 0.8 },
     },
     contextLimit:           20,
@@ -79,10 +85,13 @@ export const state = {
   _arcWorksItems: [],
   _arcWorksDetailId: null,
   _userScrolledAway: false,
+  _pendingChatAttachments: [],
+  _cloudSendNoticeShown: new Set(),
   _editMode: false,
   _selectedPairIndices: new Set(),
   _settingsNavStack: [],
   _scratchpadTimer: null,
+  _lastPromptSnapshot: null,
 };
 
 export const MOBILE_BACKEND_OVERRIDE_KEY = 'ministar-backend-base-url';

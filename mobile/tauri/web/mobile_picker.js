@@ -22,6 +22,7 @@ export function createMobilePickerController(deps) {
     cleanAITitle,
     applyTimelineSelection,
     createNewConversation,
+    ensureConversationLoaded,
   } = deps;
 
   function persistCollapsedFolders() {
@@ -69,7 +70,7 @@ export function createMobilePickerController(deps) {
     `;
   }
 
-  function activateConversation(conv, options = {}) {
+  async function activateConversation(conv, options = {}) {
     state.currentId = conv.id;
     if (options.fromHistorySheet) {
       state.timelineMode = isImportedConversation(conv) ? 'oldtimes' : 'now';
@@ -77,6 +78,15 @@ export function createMobilePickerController(deps) {
     }
     renderPicker();
     renderMessages();
+    if (!conv.messagesLoaded) {
+      try {
+        await ensureConversationLoaded(conv.id);
+      } catch (err) {
+        showToast(`读取失败：${err.message}`);
+      }
+      renderPicker();
+      renderMessages();
+    }
   }
 
   function buildHistoryButton(conv) {
@@ -85,7 +95,7 @@ export function createMobilePickerController(deps) {
     const folder = getConversationFolder(conv.id);
     btn.dataset.convId = conv.id;
     btn.dataset.folderId = folder?.id || '';
-    const count = Array.isArray(conv.messages) ? conv.messages.length : 0;
+    const count = Number(conv.message_count ?? conv.messageCount ?? (Array.isArray(conv.messages) ? conv.messages.length : 0)) || 0;
     const stamp = conv.updatedAt || conv.createdAt || conv.id || 0;
     btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${formatMobileDateOnly(stamp)} · ${count} 条消息`);
     bindConversationInteractions(btn, conv);
@@ -196,7 +206,8 @@ export function createMobilePickerController(deps) {
       btn.dataset.convId = conv.id;
       btn.dataset.folderId = getConversationFolder(conv.id)?.id || '';
       const stamp = conv.updatedAt || conv.createdAt || conv.id || 0;
-      btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${formatMobileDateOnly(stamp)} · ${(conv.messages || []).length} 条消息`);
+      const count = Number(conv.message_count ?? conv.messageCount ?? (Array.isArray(conv.messages) ? conv.messages.length : 0)) || 0;
+      btn.innerHTML = buildHistoryLabelMarkup(conv.title || '新对话', `${formatMobileDateOnly(stamp)} · ${count} 条消息`);
       bindConversationInteractions(btn, conv, { fromHistorySheet: true });
       list.appendChild(btn);
     });
@@ -602,7 +613,7 @@ export function createMobilePickerController(deps) {
       actionOpened = false;
       setPickerInteracting(false);
       suppressClick = true;
-      activateConversation(conv, options);
+      void activateConversation(conv, options);
       window.setTimeout(() => { suppressClick = false; }, 0);
     }, { passive: false });
 
@@ -627,7 +638,7 @@ export function createMobilePickerController(deps) {
         event.stopPropagation();
         return;
       }
-      activateConversation(conv, options);
+      void activateConversation(conv, options);
     });
   }
 
@@ -664,8 +675,12 @@ export function createMobilePickerController(deps) {
     if (raw === null) return;
     const name = raw.trim() || '新文件夹';
     try {
-      const folder = await apiCreateFolder(name);
+      const folder = await apiCreateFolder(name, null, state.timelineMode || 'now');
       state.folders.push(folder);
+      if (folder?.id) {
+        state.collapsedFolders.add(folder.id);
+        persistCollapsedFolders();
+      }
       renderPicker();
       showToast('文件夹已创建');
     } catch (err) {

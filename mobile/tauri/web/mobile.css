@@ -423,6 +423,58 @@ body.keyboard-open #mobile-input-dock {
   box-shadow: var(--mobile-shadow);
 }
 
+#mobile-attachment-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+#mobile-attachment-tray.hidden {
+  display: none;
+}
+
+.mobile-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(95, 127, 199, 0.14);
+  border: 1px solid rgba(122, 144, 198, 0.24);
+  color: var(--mobile-text);
+}
+
+.mobile-attachment-chip-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mobile-attachment-chip-label {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-attachment-chip-meta {
+  font-size: 11px;
+  color: rgba(236, 242, 255, 0.56);
+}
+
+.mobile-attachment-chip-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: var(--mobile-text);
+  cursor: pointer;
+}
+
 #mobile-user-input {
   width: 100%;
   min-height: calc(16px * 1.5 * 2 + 4px);

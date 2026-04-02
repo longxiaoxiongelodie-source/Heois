@@ -1,4 +1,4 @@
-import { apiAddGlobalMemory, apiCheckHealth, apiGetAvailableModels, apiGetConversation, apiGetConversationIndex, apiGetFolders, apiGetSettings, apiGetTitle, apiLookupTtsAudio, apiSaveConversations, apiSaveSettings, apiStreamChat, apiSynthesizeTts } from './api.js';
+import { apiAddGlobalMemory, apiChat, apiCheckHealth, apiGetAvailableModels, apiGetConversation, apiGetConversationIndex, apiGetFolders, apiGetSettings, apiGetTitle, apiLookupTtsAudio, apiSaveConversations, apiSaveSettings, apiStreamChat, apiSynthesizeTts } from './api.js';
 import { BACKEND_BASE_URL, getDefaultBackendBaseUrl, getStoredBackendBaseUrl, normalizeBackendBaseUrl, setBackendBaseUrl } from './state.js';
 import { createMobilePickerController } from './mobile_picker.js';
 import { createMobileInputDockController } from './mobile_input_dock.js';
@@ -754,6 +754,7 @@ function getMobilePickerController() {
 function getMobileInputDockController() {
   if (!mobileInputDockController) {
     mobileInputDockController = createMobileInputDockController({
+      apiChat,
       state: mobileState,
       escHtml,
       showToast,

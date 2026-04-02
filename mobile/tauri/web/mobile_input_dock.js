@@ -1,5 +1,6 @@
 export function createMobileInputDockController(deps) {
   const {
+    apiChat,
     apiStreamChat,
     state,
     escHtml,
@@ -363,6 +364,7 @@ export function createMobileInputDockController(deps) {
   async function callBackendChat(requestMessages, onDelta, conversationId, attachments = [], onStart = null) {
     const controller = new AbortController();
     state.activeWs = controller;
+    let streamStarted = false;
     const result = {
       usage: null,
       cancelled: false,
@@ -381,19 +383,23 @@ export function createMobileInputDockController(deps) {
         conversation_id: conversationId || '',
       }, (eventName, payload) => {
         if (eventName === 'start') {
+          streamStarted = true;
           result.model = String(payload.model || result.model || '');
           onStart?.(payload);
           return;
         }
         if (eventName === 'delta') {
+          streamStarted = true;
           onDelta(payload.text || '');
           return;
         }
         if (eventName === 'usage') {
+          streamStarted = true;
           result.usage = payload.usage || null;
           return;
         }
         if (eventName === 'done') {
+          streamStarted = true;
           state._lastPromptSnapshot = payload.debug?.trace?.prompt_snapshot || null;
           import('./settings.js')
             .then(mod => mod.populateDebugSection?.())
@@ -413,6 +419,25 @@ export function createMobileInputDockController(deps) {
       return result;
     } catch (err) {
       if (err?.name === 'AbortError') return { ...result, cancelled: true };
+      if (!streamStarted) {
+        const fallback = await apiChat({
+          worker: 'partner',
+          messages: requestMessages,
+          attachments,
+          conversation_id: conversationId || '',
+        }, { signal: controller.signal });
+        onStart?.(fallback);
+        if (fallback.text) onDelta(fallback.text);
+        return {
+          ...result,
+          usage: fallback.usage || null,
+          saved_memories: fallback.debug?.effects?.saved_memories || [],
+          saved_session_memories: fallback.debug?.effects?.saved_session_memories || [],
+          scribe: fallback.debug?.effects?.scribe || result.scribe,
+          prompt_snapshot: fallback.debug?.trace?.prompt_snapshot || null,
+          model: String(fallback.model || result.model || ''),
+        };
+      }
       throw err;
     } finally {
       state.activeWs = null;

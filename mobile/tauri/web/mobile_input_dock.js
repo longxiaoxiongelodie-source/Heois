@@ -367,9 +367,22 @@ export function createMobileInputDockController(deps) {
     const controller = new AbortController();
     state.activeWs = controller;
     let streamStarted = false;
+    let sawDelta = false;
+    let streamTimedOut = false;
+    let streamWatchdog = null;
+    const resetStreamWatchdog = () => {
+      window.clearTimeout(streamWatchdog || 0);
+      streamWatchdog = window.setTimeout(() => {
+        streamTimedOut = true;
+        try {
+          controller.abort();
+        } catch (_) {}
+      }, sawDelta ? 12000 : 18000);
+    };
     const result = {
       usage: null,
       cancelled: false,
+      timed_out: false,
       saved_memories: [],
       saved_session_memories: [],
       scribe: { updated: false, pair_count: 0 },
@@ -385,6 +398,7 @@ export function createMobileInputDockController(deps) {
         stream: true,
         conversation_id: conversationId || '',
       }, (eventName, payload) => {
+        resetStreamWatchdog();
         if (eventName === 'start') {
           streamStarted = true;
           result.model = String(payload.model || result.model || '');
@@ -393,6 +407,7 @@ export function createMobileInputDockController(deps) {
         }
         if (eventName === 'delta') {
           streamStarted = true;
+          sawDelta = true;
           onDelta(payload.text || '');
           return;
         }
@@ -422,7 +437,29 @@ export function createMobileInputDockController(deps) {
       }, { signal: controller.signal });
       return result;
     } catch (err) {
-      if (err?.name === 'AbortError') return { ...result, cancelled: true };
+      if (err?.name === 'AbortError') {
+        if (streamTimedOut && !streamStarted) {
+          const fallback = await apiChat({
+            worker: 'partner',
+            messages: requestMessages,
+            attachments,
+            conversation_id: conversationId || '',
+          }, { signal: null });
+          onStart?.(fallback);
+          if (fallback.text) onDelta(fallback.text);
+          return {
+            ...result,
+            usage: fallback.usage || null,
+            saved_memories: fallback.debug?.effects?.saved_memories || [],
+            saved_session_memories: fallback.debug?.effects?.saved_session_memories || [],
+            scribe: fallback.debug?.effects?.scribe || result.scribe,
+            prompt_snapshot: fallback.debug?.trace?.prompt_snapshot || null,
+            model: String(fallback.model || result.model || ''),
+            postEffectId: String(fallback.debug?.effects?.post_effect_id || ''),
+          };
+        }
+        return { ...result, cancelled: true, timed_out: streamTimedOut };
+      }
       if (!streamStarted) {
         const fallback = await apiChat({
           worker: 'partner',
@@ -445,6 +482,7 @@ export function createMobileInputDockController(deps) {
       }
       throw err;
     } finally {
+      window.clearTimeout(streamWatchdog || 0);
       state.activeWs = null;
     }
   }
@@ -487,6 +525,13 @@ export function createMobileInputDockController(deps) {
         if (currentModel) stream.meta.textContent = currentModel;
       });
       streamRenderer.flush(fullContent);
+      if (result?.timed_out) {
+        showToast(fullContent ? '本轮回复收尾超时，已按当前内容结束' : '本轮回复超时');
+      }
+      if (!fullContent && result?.cancelled) {
+        stream.item.remove();
+        return;
+      }
 
       const assistantMsg = createMessage('assistant', fullContent, {
         model: String(result?.model || stream.meta.textContent || ASSISTANT_LABEL),

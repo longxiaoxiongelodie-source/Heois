@@ -35,6 +35,7 @@ const MOBILE_APP_ICON_KEY = 'ministar-app-icon-choice';
 const MOBILE_MODEL_FAVORITES_KEY = 'start-mobile-model-favorites';
 const MOBILE_ASSISTANT_LABEL = '助手';
 const MOBILE_CHAT_STATUS_LABEL = '聊天已接入后端';
+const MOBILE_BUILD_STAMP = '2026-04-02 · api-chat-shell';
 const MOBILE_COLLAPSED_FOLDERS_KEY = 'ministar-mobile-collapsed-folders';
 const MOBILE_APP_ICON_OPTIONS = [
   { key: 'default', native: null, label: '现行', desc: '当前主图标，沿用现在这版。', preview: 'ministar-icon-default.png' },
@@ -923,6 +924,8 @@ function updateSettingsSheet() {
   if (appIconEl) appIconEl.textContent = getCurrentAppIconOption().label;
   const healthEl = document.getElementById('mobile-settings-health-sub');
   if (healthEl) healthEl.textContent = healthLabel;
+  const buildEl = document.getElementById('mobile-settings-build-sub');
+  if (buildEl) buildEl.textContent = MOBILE_BUILD_STAMP;
 }
 
 function resetMobileCachedState() {
@@ -1047,6 +1050,10 @@ function renderConnectionError(err) {
       <div style="margin-top:10px;font-size:0.92em;opacity:0.82;line-height:1.5;">
         如果你是手机连接电脑后端，请把后端启动为 <code>--host 0.0.0.0</code>，
         不能只监听 <code>127.0.0.1</code>。
+      </div>
+      <div style="margin-top:10px;font-size:0.9em;opacity:0.72;line-height:1.5;">
+        当前壳版本：<code>${MOBILE_BUILD_STAMP}</code><br>
+        如果你这里仍看到“websocket 连接失败”，通常说明手机里运行的还是旧安装包，不是当前这版 <code>/api/chat</code> 壳。
       </div>
       <div class="mobile-empty-action-row">
         <button id="mobile-open-backend-sheet-btn" class="mobile-empty-action">配置后端地址</button>

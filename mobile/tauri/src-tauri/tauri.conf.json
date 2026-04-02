@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "MiniStar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.baiyu.ministar",
   "build": {
     "beforeDevCommand": "bash ../../launchers/start.sh",

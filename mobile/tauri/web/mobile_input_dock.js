@@ -546,7 +546,7 @@ export function createMobileInputDockController(deps) {
     autosizeInput();
     renderMessages();
     renderPicker();
-    await saveConversations();
+    saveConversations();
     const attachments = consumePendingAttachments();
     await performChat(conv, {
       attachments,

@@ -911,9 +911,13 @@ function renderMapSheet() {
 
 function updateSettingsSheet() {
   const timelineLabel = mobileState.timelineMode === 'oldtimes' ? '旧时光' : '现在';
+  const hasLoadedRuntime =
+    !!mobileState.settings ||
+    (Array.isArray(mobileState.conversations) && mobileState.conversations.length > 0) ||
+    (Array.isArray(mobileState.folders) && mobileState.folders.length > 0);
   const healthLabel = mobileState.healthMeta
     ? `已连接 · ${mobileState.healthMeta.data_root || '未知数据目录'}`
-    : '未连接';
+    : (hasLoadedRuntime ? '已连接' : '未连接');
   const backendEl = document.getElementById('mobile-settings-backend-sub');
   if (backendEl) backendEl.textContent = BACKEND_BASE_URL;
   const timelineEl = document.getElementById('mobile-settings-timeline-sub');
@@ -1208,6 +1212,7 @@ async function loadInitialData() {
     apiGetFolders(mobileState.timelineMode || 'now'),
   ]);
   mobileState.settings = settings;
+  if (!mobileState.healthMeta) mobileState.healthMeta = { data_root: '' };
   mobileState.appIconChoice = localStorage.getItem(MOBILE_APP_ICON_KEY) || 'default';
   mobileState.conversations = Array.isArray(conversations) ? conversations.map(normalizeMobileConversation) : [];
   mobileState.folders = Array.isArray(folders) ? folders : [];

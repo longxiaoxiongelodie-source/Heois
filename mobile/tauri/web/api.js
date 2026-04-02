@@ -337,6 +337,7 @@ export function apiSaveConversations(conversations, settings) {
   return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    timeout_ms: 8000,
     body: JSON.stringify({ conversations, settings }),
   });
 }

@@ -270,6 +270,12 @@ export function createMobileInputDockController(deps) {
     });
   }
 
+  function getCloudConfirmKey(route = {}, hasAttachments = false) {
+    const providerKey = String(route.providerId || route.providerName || route.baseUrl || route.host || '').trim();
+    if (!providerKey) return '';
+    return `${providerKey}::${hasAttachments ? 'with-attachments' : 'text-only'}`;
+  }
+
   function enterSendingMode() {
     const btn = document.getElementById('mobile-send-btn');
     if (!btn) return;
@@ -562,10 +568,26 @@ export function createMobileInputDockController(deps) {
     const hasAttachments = pendingAttachments.length > 0;
     if (route.isCloud) {
       if (!hasAcknowledgedCloudRoute(route, state._cloudSendNoticeShown)) {
-        const message = hasAttachments
-          ? `当前消息会发送到云端模型 ${route.providerName || route.host || ''}，并包含本轮附件。附件不会写入历史，但会发送到远端。是否继续？`
-          : `当前聊天正在使用云端模型 ${route.providerName || route.host || ''}。这条消息会发送到远端服务。是否继续？`;
-        if (!window.confirm(message)) return;
+        const confirmKey = getCloudConfirmKey(route, hasAttachments);
+        if (state._pendingCloudSendConfirmKey !== confirmKey) {
+          state._pendingCloudSendConfirmKey = confirmKey;
+          window.clearTimeout(state._pendingCloudSendConfirmTimer || 0);
+          state._pendingCloudSendConfirmTimer = window.setTimeout(() => {
+            if (state._pendingCloudSendConfirmKey === confirmKey) {
+              state._pendingCloudSendConfirmKey = '';
+              state._pendingCloudSendConfirmTimer = null;
+            }
+          }, 4000);
+          showToast(
+            hasAttachments
+              ? `将发送到云端 ${route.providerName || route.host || ''}，并包含附件；4 秒内再点一次发送继续`
+              : `将发送到云端 ${route.providerName || route.host || ''}；4 秒内再点一次发送继续`
+          );
+          return;
+        }
+        state._pendingCloudSendConfirmKey = '';
+        window.clearTimeout(state._pendingCloudSendConfirmTimer || 0);
+        state._pendingCloudSendConfirmTimer = null;
         markCloudRouteAcknowledged(route, state._cloudSendNoticeShown);
       }
     }

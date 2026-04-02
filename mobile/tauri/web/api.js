@@ -283,6 +283,10 @@ export async function apiStreamChat(payload, onEvent, options = {}) {
   }
 }
 
+export async function apiGetChatPostEffects(postEffectId) {
+  return fetchJsonOrThrow(BACKEND_BASE_URL + '/api/chat/post-effects/' + encodeURIComponent(String(postEffectId || '')));
+}
+
 // ── Settings ──────────────────────────────────────────────────
 
 export function apiGetSettings() {

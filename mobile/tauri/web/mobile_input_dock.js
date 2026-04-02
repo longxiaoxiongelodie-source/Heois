@@ -1,6 +1,7 @@
 export function createMobileInputDockController(deps) {
   const {
     apiChat,
+    apiGetChatPostEffects,
     apiStreamChat,
     state,
     bindTapAction,
@@ -374,6 +375,7 @@ export function createMobileInputDockController(deps) {
       scribe: { updated: false, pair_count: 0 },
       prompt_snapshot: null,
       model: '',
+      postEffectId: '',
     };
     try {
       await apiStreamChat({
@@ -411,6 +413,7 @@ export function createMobileInputDockController(deps) {
           result.scribe = payload.debug?.effects?.scribe || result.scribe;
           result.prompt_snapshot = payload.debug?.trace?.prompt_snapshot || null;
           result.model = String(payload.model || result.model || '');
+          result.postEffectId = String(payload.debug?.effects?.post_effect_id || '');
           return;
         }
         if (eventName === 'error') {
@@ -437,12 +440,24 @@ export function createMobileInputDockController(deps) {
           scribe: fallback.debug?.effects?.scribe || result.scribe,
           prompt_snapshot: fallback.debug?.trace?.prompt_snapshot || null,
           model: String(fallback.model || result.model || ''),
+          postEffectId: String(fallback.debug?.effects?.post_effect_id || ''),
         };
       }
       throw err;
     } finally {
       state.activeWs = null;
     }
+  }
+
+  async function pollPostEffects(postEffectId, { attempts = 20, delayMs = 500 } = {}) {
+    const id = String(postEffectId || '').trim();
+    if (!id) return null;
+    for (let index = 0; index < attempts; index += 1) {
+      const data = await apiGetChatPostEffects(id);
+      if (data?.done) return data.effects || null;
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+    }
+    return null;
   }
 
   async function performChat(conv, options = {}) {
@@ -501,6 +516,25 @@ export function createMobileInputDockController(deps) {
       renderMessages();
       await saveConversations();
       showChatPostEffects(result);
+      const postEffectId = String(result?.postEffectId || '').trim();
+      if (postEffectId) {
+        pollPostEffects(postEffectId)
+          .then(async (effects) => {
+            if (!effects) return;
+            assistantMsg.meta = {
+              ...(assistantMsg.meta || {}),
+              scribeTokens: effects?.scribe?.usage?.total_tokens ?? null,
+            };
+            await saveConversations();
+            renderMessages();
+            showChatPostEffects({
+              saved_memories: effects?.saved_memories || [],
+              saved_session_memories: effects?.saved_session_memories || [],
+              scribe: effects?.scribe || null,
+            });
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       stream.bubble.innerHTML = `<p>${escHtml(err.message)}</p>`;
       stream.item.classList.add('error');

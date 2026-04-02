@@ -768,7 +768,6 @@ function getMobileInputDockController() {
       updateConversationTitle,
       renderMessages,
       renderPicker,
-      formatCurrentModelLabel,
     });
   }
   return mobileInputDockController;

@@ -15,7 +15,6 @@ export function createMobileInputDockController(deps) {
     updateConversationTitle,
     renderMessages,
     renderPicker,
-    formatCurrentModelLabel,
   } = deps;
   let dockResizeObserver = null;
   let shellHeightPx = 0;

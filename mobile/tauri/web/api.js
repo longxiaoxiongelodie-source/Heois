@@ -645,7 +645,31 @@ export async function apiSynthesizeTts(text) {
 }
 
 export async function apiCheckHealth(baseUrl = BACKEND_BASE_URL) {
-  return fetchJsonOrThrow(`${baseUrl}/api/health`, { timeout_ms: 4000 });
+  const timeoutMs = 4000;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(new DOMException('timeout', 'AbortError')), timeoutMs);
+  let resp;
+  try {
+    resp = await fetch(`${baseUrl}/api/health`, { signal: controller.signal });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new Error(`请求超时（>${timeoutMs}ms）`);
+    throw new Error(describeNetworkError(err, `${baseUrl}/api/health`));
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+  let body;
+  try {
+    body = await resp.json();
+  } catch (_) {
+    throw new Error(`接口返回非 JSON 响应（HTTP ${resp.status}）`);
+  }
+  if (!resp.ok || !body?.ok) {
+    const detail = typeof body?.error === 'string'
+      ? body.error
+      : body?.error?.message || body?.message || `接口返回错误（HTTP ${resp.status}）`;
+    throw new Error(detail);
+  }
+  return body;
 }
 
 // ── Memory ────────────────────────────────────────────────────

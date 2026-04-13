@@ -25,5 +25,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.ACR_REGISTRY }}/你的命名空间/你的镜像名:latest
-            ${{ secrets.ACR_REGISTRY }}/你的命名空间/你的镜像名:${{ github.sha }}
+            ${{ secrets.ACR_REGISTRY }}/fluorene/你的镜像名:latest
+            ${{ secrets.ACR_REGISTRY }}/fluorene/heois-app:${{ github.sha }}

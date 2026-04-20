@@ -48,7 +48,7 @@
         <div class="mobile-chat-header-center">
           <div id="mobile-conv-title">新对话</div>
           <button id="mobile-model-trigger" class="mobile-model-trigger" title="选择模型">
-            <span id="mobile-model-name">未选择模型</span>
+            <span id="mobile-model-name">聊天已接入后端</span>
           </button>
         </div>
         <div class="mobile-chat-header-right">
@@ -62,9 +62,12 @@
 
       <footer id="mobile-input-dock">
         <div id="mobile-extra-menu" class="hidden">
+          <button id="mobile-attach-btn" class="mobile-extra-item">上传附件</button>
           <button id="mobile-clear-context-btn" class="mobile-extra-item">清空上下文</button>
           <button id="mobile-new-chat-inline-btn" class="mobile-extra-item">新对话</button>
         </div>
+        <input id="mobile-attachment-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain,image/*" multiple hidden />
+        <div id="mobile-attachment-tray" class="hidden"></div>
         <div id="mobile-input-bar">
           <button id="mobile-extra-btn" class="mobile-pill-icon" title="更多">+</button>
           <textarea id="mobile-user-input" rows="2" placeholder="输入消息，Ctrl+Enter 发送…"></textarea>
@@ -125,7 +128,7 @@
         </button>
         <div class="mobile-model-item mobile-settings-static">
           <div class="mobile-model-title">当前模型</div>
-          <div id="mobile-settings-model-sub" class="mobile-model-sub">未选择模型</div>
+          <div id="mobile-settings-model-sub" class="mobile-model-sub">聊天已接入后端</div>
         </div>
         <button id="mobile-settings-app-icon-trigger" class="mobile-model-item">
           <div class="mobile-model-title">App 图标</div>
@@ -138,6 +141,10 @@
         <div class="mobile-model-item mobile-settings-static">
           <div class="mobile-model-title">连接状态</div>
           <div id="mobile-settings-health-sub" class="mobile-model-sub">检查中…</div>
+        </div>
+        <div class="mobile-model-item mobile-settings-static">
+          <div class="mobile-model-title">当前构建</div>
+          <div id="mobile-settings-build-sub" class="mobile-model-sub">读取中…</div>
         </div>
         <button id="mobile-settings-clear-cache-btn" class="mobile-model-item mobile-settings-danger">
           <div class="mobile-model-title">清手机端缓存</div>

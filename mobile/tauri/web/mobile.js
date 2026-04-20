@@ -1,7 +1,8 @@
-import { apiAddGlobalMemory, apiGetAvailableModels, apiGetConversations, apiGetFolders, apiGetSettings, apiSaveConversations, apiSaveSettings } from './api.js';
-import { BACKEND_BASE_URL, BACKEND_WS_URL, getDefaultBackendBaseUrl, getStoredBackendBaseUrl, normalizeBackendBaseUrl, setBackendBaseUrl } from './state.js';
+import { apiAddGlobalMemory, apiChat, apiCheckHealth, apiGetAvailableModels, apiGetChatPostEffects, apiGetConversation, apiGetConversationIndex, apiGetFolders, apiGetSettings, apiGetTitle, apiLookupTtsAudio, apiSaveConversations, apiSaveSettings, apiStreamChat, apiSynthesizeTts } from './api.js';
+import { BACKEND_BASE_URL, getDefaultBackendBaseUrl, getStoredBackendBaseUrl, normalizeBackendBaseUrl, setBackendBaseUrl } from './state.js';
 import { createMobilePickerController } from './mobile_picker.js';
 import { createMobileInputDockController } from './mobile_input_dock.js';
+import { getChatRouteMeta, hasAcknowledgedCloudRoute, markCloudRouteAcknowledged } from './utils.js';
 
 const mobileState = {
   settings: null,
@@ -19,6 +20,8 @@ const mobileState = {
   activeMessageActionId: null,
   messageDeleteConfirm: false,
   drag: null,
+  _pendingChatAttachments: [],
+  _cloudSendNoticeShown: new Set(),
   modelFavorites: JSON.parse(localStorage.getItem('start-mobile-model-favorites') || '[]'),
   appIconChoice: localStorage.getItem('ministar-app-icon-choice') || 'default',
   collapsedFolders: new Set(JSON.parse(localStorage.getItem('ministar-mobile-collapsed-folders') || '[]')),
@@ -30,6 +33,9 @@ let mobileTtsObjectUrl = null;
 const MOBILE_SHEET_TRANSITION_MS = 240;
 const MOBILE_APP_ICON_KEY = 'ministar-app-icon-choice';
 const MOBILE_MODEL_FAVORITES_KEY = 'start-mobile-model-favorites';
+const MOBILE_ASSISTANT_LABEL = '助手';
+const MOBILE_CHAT_STATUS_LABEL = '聊天已接入后端';
+const MOBILE_BUILD_STAMP = '2026-04-02 · api-chat-shell';
 const MOBILE_COLLAPSED_FOLDERS_KEY = 'ministar-mobile-collapsed-folders';
 const MOBILE_APP_ICON_OPTIONS = [
   { key: 'default', native: null, label: '现行', desc: '当前主图标，沿用现在这版。', preview: 'ministar-icon-default.png' },
@@ -159,6 +165,15 @@ function persistCollapsedFolders() {
   localStorage.setItem('ministar-mobile-collapsed-folders', JSON.stringify([...mobileState.collapsedFolders]));
 }
 
+function resetCollapsedFoldersToDefault(folders = []) {
+  mobileState.collapsedFolders = new Set(
+    (Array.isArray(folders) ? folders : [])
+      .map(folder => folder?.id)
+      .filter(Boolean)
+  );
+  persistCollapsedFolders();
+}
+
 function toggleFolderCollapsed(folderId) {
   if (!folderId) return;
   if (mobileState.collapsedFolders.has(folderId)) mobileState.collapsedFolders.delete(folderId);
@@ -186,15 +201,24 @@ function saveConversations() {
   });
 }
 
+async function ensureConversationLoaded(convId) {
+  const conv = mobileState.conversations.find(item => item.id === convId);
+  if (!conv || conv.messagesLoaded) return conv || null;
+  if (conv._loadingMessages) return conv;
+  conv._loadingMessages = true;
+  try {
+    const full = await apiGetConversation(convId);
+    if (!full || full.id !== convId) return conv;
+    Object.assign(conv, normalizeMobileConversation(full), { messagesLoaded: true });
+    return conv;
+  } finally {
+    conv._loadingMessages = false;
+  }
+}
+
 async function callBackendTitle(messages) {
-  const resp = await fetch(`${BACKEND_BASE_URL}/api/title`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings: mobileState.settings, messages }),
-  });
-  const json = await resp.json();
-  if (!json.ok) throw new Error(json.error || '标题生成失败');
-  return json.data?.title || '';
+  const data = await apiGetTitle(messages);
+  return data.title || '';
 }
 
 function cleanAITitle(raw) {
@@ -286,7 +310,12 @@ function normalizeMobileMessage(msg) {
 function normalizeMobileConversation(conv) {
   if (!conv || typeof conv !== 'object') return conv;
   const messages = Array.isArray(conv.messages) ? conv.messages.map(normalizeMobileMessage) : [];
-  return { ...conv, messages };
+  return {
+    ...conv,
+    messages,
+    messagesLoaded: conv.messagesLoaded !== false,
+    message_count: Number(conv.message_count ?? conv.messageCount ?? messages.length) || 0,
+  };
 }
 
 function getMessageTokenCount(msg) {
@@ -382,32 +411,12 @@ async function requestMobileTtsAudio(msg) {
   }
   const text = getMobileTtsText(msg.content);
 
-  const lookupResp = await fetch(`${BACKEND_BASE_URL}/api/tts/audio-lookup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings: mobileState.settings, text }),
-  });
-  if (lookupResp.ok) {
-    const lookup = await lookupResp.json();
-    if (lookup?.found && lookup?.url) {
-      return { audioUrl: `${BACKEND_BASE_URL}${lookup.url}` };
-    }
+  const lookup = await apiLookupTtsAudio(text).catch(() => null);
+  if (lookup?.found && lookup?.url) {
+    return { audioUrl: `${BACKEND_BASE_URL}${lookup.url}` };
   }
 
-  const resp = await fetch(`${BACKEND_BASE_URL}/api/tts/synthesize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings: mobileState.settings, text }),
-  });
-  if (!resp.ok) {
-    let body = null;
-    try { body = await resp.json(); } catch (_) {}
-    throw new Error(body?.error || `HTTP ${resp.status}`);
-  }
-  const audioUrl = resp.headers.get('X-TTS-Audio-Url') || '';
-  if (audioUrl) return { audioUrl: `${BACKEND_BASE_URL}${audioUrl}` };
-  const blob = await resp.blob();
-  return { blob };
+  return apiSynthesizeTts(text);
 }
 
 function buildMobileMessageHeader(msg) {
@@ -419,7 +428,7 @@ function buildMobileMessageHeader(msg) {
   if (msg.role === 'assistant') {
     const modelLine = document.createElement('div');
     modelLine.className = 'mobile-message-meta-model';
-    modelLine.textContent = msg.model || formatCurrentModelLabel();
+    modelLine.textContent = msg.model || MOBILE_ASSISTANT_LABEL;
     meta.appendChild(modelLine);
   }
 
@@ -521,13 +530,7 @@ async function checkMobileMessageTtsFile(msg, button) {
       throw new Error('请先在桌面端补全 TTS 配置');
     }
     const text = getMobileTtsText(msg.content);
-    const resp = await fetch(`${BACKEND_BASE_URL}/api/tts/audio-lookup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings: mobileState.settings, text }),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
+    const data = await apiLookupTtsAudio(text);
     showToast(data?.found ? '本地已有语音' : '本地没有对应语音');
     if (button) {
       button.textContent = data?.found ? '✓' : '✕';
@@ -669,16 +672,9 @@ function updateHeader() {
   const titleEl = document.getElementById('mobile-conv-title');
   const modelEl = document.getElementById('mobile-model-name');
   titleEl.textContent = conv?.title || '新对话';
-  modelEl.textContent = formatCurrentModelLabel();
+  const route = getChatRouteMeta(mobileState.settings || {});
+  modelEl.textContent = route.providerId ? route.label : MOBILE_CHAT_STATUS_LABEL;
   updateSettingsSheet();
-}
-
-function formatCurrentModelLabel() {
-  const chatTask = mobileState.settings?.taskModels?.chat || {};
-  const providerId = chatTask.provider || '';
-  const providerName = mobileState.settings?.providers?.[providerId]?.name || providerId || '';
-  const modelName = chatTask.modelName || '未选择模型';
-  return providerName ? `${modelName} · ${providerName}` : modelName;
 }
 
 function renderMessages() {
@@ -692,6 +688,12 @@ function renderMessages() {
   }
 
   wrap.innerHTML = '';
+  if (conv._loadingMessages) {
+    wrap.innerHTML = '<div class="mobile-empty-state">正在读取这段对话…</div>';
+    updateHeader();
+    renderMapSheet();
+    return;
+  }
   conv.messages.forEach((msg, index) => {
     const item = document.createElement('article');
     item.className = `mobile-message ${msg.role === 'user' ? 'user' : 'assistant'}`;
@@ -729,6 +731,7 @@ function getMobilePickerController() {
   if (!mobilePickerController) {
     mobilePickerController = createMobilePickerController({
       state: mobileState,
+      apiStreamChat,
       escHtml,
       showToast,
       openSheet,
@@ -742,6 +745,7 @@ function getMobilePickerController() {
       cleanAITitle,
       applyTimelineSelection,
       createNewConversation,
+      ensureConversationLoaded,
     });
   }
   return mobilePickerController;
@@ -750,9 +754,16 @@ function getMobilePickerController() {
 function getMobileInputDockController() {
   if (!mobileInputDockController) {
     mobileInputDockController = createMobileInputDockController({
+      apiChat,
+      apiGetChatPostEffects,
+      apiStreamChat,
       state: mobileState,
+      bindTapAction,
       escHtml,
       showToast,
+      getChatRouteMeta,
+      hasAcknowledgedCloudRoute,
+      markCloudRouteAcknowledged,
       showChatPostEffects,
       saveConversations,
       createNewConversation,
@@ -761,8 +772,6 @@ function getMobileInputDockController() {
       updateConversationTitle,
       renderMessages,
       renderPicker,
-      formatCurrentModelLabel,
-      BACKEND_WS_URL,
     });
   }
   return mobileInputDockController;
@@ -905,19 +914,30 @@ function renderMapSheet() {
 
 function updateSettingsSheet() {
   const timelineLabel = mobileState.timelineMode === 'oldtimes' ? '旧时光' : '现在';
+  const hasLoadedRuntime =
+    !!mobileState.settings ||
+    (Array.isArray(mobileState.conversations) && mobileState.conversations.length > 0) ||
+    (Array.isArray(mobileState.folders) && mobileState.folders.length > 0);
   const healthLabel = mobileState.healthMeta
     ? `已连接 · ${mobileState.healthMeta.data_root || '未知数据目录'}`
-    : '未连接';
+    : (hasLoadedRuntime ? '已连接' : '未连接');
   const backendEl = document.getElementById('mobile-settings-backend-sub');
   if (backendEl) backendEl.textContent = BACKEND_BASE_URL;
   const timelineEl = document.getElementById('mobile-settings-timeline-sub');
   if (timelineEl) timelineEl.textContent = timelineLabel;
   const modelEl = document.getElementById('mobile-settings-model-sub');
-  if (modelEl) modelEl.textContent = formatCurrentModelLabel();
+  if (modelEl) modelEl.textContent = MOBILE_CHAT_STATUS_LABEL;
   const appIconEl = document.getElementById('mobile-settings-app-icon-sub');
   if (appIconEl) appIconEl.textContent = getCurrentAppIconOption().label;
   const healthEl = document.getElementById('mobile-settings-health-sub');
   if (healthEl) healthEl.textContent = healthLabel;
+  const buildEl = document.getElementById('mobile-settings-build-sub');
+  if (buildEl) buildEl.textContent = MOBILE_BUILD_STAMP;
+}
+
+function renderBuildStampImmediately() {
+  const buildEl = document.getElementById('mobile-settings-build-sub');
+  if (buildEl) buildEl.textContent = MOBILE_BUILD_STAMP;
 }
 
 function resetMobileCachedState() {
@@ -1031,9 +1051,7 @@ function openBackendSheet(withMessage = '') {
 }
 
 async function requestHealthWithBaseUrl(baseUrl) {
-  const resp = await fetch(`${baseUrl}/api/health`);
-  if (!resp.ok) throw new Error(`连接后端失败（HTTP ${resp.status}）`);
-  return resp.json();
+  return apiCheckHealth(baseUrl);
 }
 
 function renderConnectionError(err) {
@@ -1041,6 +1059,14 @@ function renderConnectionError(err) {
   wrap.innerHTML = `
     <div class="mobile-empty-state">
       无法连接 StarT 后端。<br>${escHtml(err.message)}
+      <div style="margin-top:10px;font-size:0.92em;opacity:0.82;line-height:1.5;">
+        如果你是手机连接电脑后端，请把后端启动为 <code>--host 0.0.0.0</code>，
+        不能只监听 <code>127.0.0.1</code>。
+      </div>
+      <div style="margin-top:10px;font-size:0.9em;opacity:0.72;line-height:1.5;">
+        当前壳版本：<code>${MOBILE_BUILD_STAMP}</code><br>
+        如果你这里仍看到“websocket 连接失败”，通常说明手机里运行的还是旧安装包，不是当前这版 <code>/api/chat</code> 壳。
+      </div>
       <div class="mobile-empty-action-row">
         <button id="mobile-open-backend-sheet-btn" class="mobile-empty-action">配置后端地址</button>
       </div>
@@ -1140,7 +1166,7 @@ async function createNewConversation(folderId = null) {
     return;
   }
   const id = Date.now().toString();
-  const conv = { id, title: '新对话', messages: [] };
+  const conv = { id, title: '新对话', messagesLoaded: true, message_count: 0, messages: [] };
   mobileState.conversations.unshift(conv);
   mobileState.currentId = id;
   if (folderId) {
@@ -1185,13 +1211,15 @@ async function loadInitialData() {
   await healthCheck();
   const [settings, conversations, folders] = await Promise.all([
     apiGetSettings(),
-    apiGetConversations(),
+    apiGetConversationIndex(),
     apiGetFolders(mobileState.timelineMode || 'now'),
   ]);
   mobileState.settings = settings;
+  if (!mobileState.healthMeta) mobileState.healthMeta = { data_root: '' };
   mobileState.appIconChoice = localStorage.getItem(MOBILE_APP_ICON_KEY) || 'default';
   mobileState.conversations = Array.isArray(conversations) ? conversations.map(normalizeMobileConversation) : [];
   mobileState.folders = Array.isArray(folders) ? folders : [];
+  resetCollapsedFoldersToDefault(mobileState.folders);
   await syncAppIconChoiceFromShell();
   applyTimelineSelection();
   renderMessages();
@@ -1212,6 +1240,7 @@ async function setTimelineMode(mode) {
   if (mode !== 'now' && mode !== 'oldtimes') return;
   mobileState.timelineMode = mode;
   mobileState.folders = await apiGetFolders(mobileState.timelineMode || 'now').catch(() => []);
+  resetCollapsedFoldersToDefault(mobileState.folders);
   applyTimelineSelection();
   renderPicker();
   renderMessages();
@@ -1430,6 +1459,8 @@ function bindEvents() {
 async function init() {
   bindEvents();
   populateBackendInput();
+  renderBuildStampImmediately();
+  updateSettingsSheet();
   getMobileInputDockController().init();
 
   try {

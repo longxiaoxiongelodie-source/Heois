@@ -1,8 +1,15 @@
 export function createMobileInputDockController(deps) {
   const {
+    apiChat,
+    apiGetChatPostEffects,
+    apiStreamChat,
     state,
+    bindTapAction,
     escHtml,
     showToast,
+    getChatRouteMeta,
+    hasAcknowledgedCloudRoute,
+    markCloudRouteAcknowledged,
     showChatPostEffects,
     saveConversations,
     createNewConversation,
@@ -11,11 +18,14 @@ export function createMobileInputDockController(deps) {
     updateConversationTitle,
     renderMessages,
     renderPicker,
-    formatCurrentModelLabel,
-    BACKEND_WS_URL,
   } = deps;
   let dockResizeObserver = null;
   let shellHeightPx = 0;
+  const ASSISTANT_LABEL = '助手';
+  const MAX_TEXT_FILE_CHARS = 120000;
+  const MAX_IMAGE_FILE_BYTES = 5 * 1024 * 1024;
+  const ACCEPTED_TEXT_EXTENSIONS = new Set(['md', 'txt']);
+  const ACCEPTED_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
 
   function getInput() {
     return document.getElementById('mobile-user-input');
@@ -23,6 +33,14 @@ export function createMobileInputDockController(deps) {
 
   function getDock() {
     return document.getElementById('mobile-input-dock');
+  }
+
+  function getAttachmentInput() {
+    return document.getElementById('mobile-attachment-input');
+  }
+
+  function getAttachmentTray() {
+    return document.getElementById('mobile-attachment-tray');
   }
 
   function setRootVar(name, value) {
@@ -108,6 +126,150 @@ export function createMobileInputDockController(deps) {
     wrap.scrollTo({ top: wrap.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   }
 
+  function formatBytes(bytes = 0) {
+    const value = Number(bytes || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function getExt(name = '') {
+    const text = String(name || '');
+    const idx = text.lastIndexOf('.');
+    return idx >= 0 ? text.slice(idx + 1).toLowerCase() : '';
+  }
+
+  function readAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error(`读取文件失败：${file.name}`));
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  function readAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error(`读取图片失败：${file.name}`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function fileToAttachment(file) {
+    const mimeType = String(file?.type || '').trim();
+    const ext = getExt(file?.name || '');
+    if (mimeType.startsWith('image/') || ACCEPTED_IMAGE_EXTENSIONS.has(ext)) {
+      if (file.size > MAX_IMAGE_FILE_BYTES) {
+        throw new Error(`图片过大：${file.name}，请控制在 ${formatBytes(MAX_IMAGE_FILE_BYTES)} 内`);
+      }
+      return {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind: 'image',
+        name: file.name,
+        mime_type: mimeType || 'image/*',
+        size: file.size,
+        data_url: await readAsDataUrl(file),
+      };
+    }
+    if (ACCEPTED_TEXT_EXTENSIONS.has(ext)) {
+      const text = await readAsText(file);
+      if (text.length > MAX_TEXT_FILE_CHARS) {
+        throw new Error(`文本过长：${file.name}，请控制在 ${MAX_TEXT_FILE_CHARS} 字以内`);
+      }
+      return {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind: 'text_file',
+        name: file.name,
+        mime_type: mimeType || 'text/plain',
+        size: file.size,
+        text,
+      };
+    }
+    throw new Error(`暂不支持该文件类型：${file.name}`);
+  }
+
+  function attachmentLabel(item) {
+    return item.kind === 'image' ? `图片 · ${item.name}` : `文本 · ${item.name}`;
+  }
+
+  function renderPendingAttachments() {
+    const tray = getAttachmentTray();
+    if (!tray) return;
+    const items = Array.isArray(state._pendingChatAttachments) ? state._pendingChatAttachments : [];
+    tray.innerHTML = '';
+    tray.classList.toggle('hidden', items.length === 0);
+    items.forEach((item) => {
+      const chip = document.createElement('div');
+      chip.className = 'mobile-attachment-chip';
+      chip.innerHTML =
+        `<div class="mobile-attachment-chip-main">` +
+          `<span class="mobile-attachment-chip-label">${escHtml(attachmentLabel(item))}</span>` +
+          `<span class="mobile-attachment-chip-meta">${escHtml(formatBytes(item.size || 0))}</span>` +
+        `</div>` +
+        `<button type="button" class="mobile-attachment-chip-remove" data-mobile-attachment-remove="${escHtml(item.id || '')}">×</button>`;
+      tray.appendChild(chip);
+    });
+    syncDockMetrics();
+  }
+
+  function openAttachmentPicker() {
+    document.getElementById('mobile-extra-menu')?.classList.add('hidden');
+    getAttachmentInput()?.click();
+  }
+
+  async function handleAttachmentFiles(event) {
+    const input = event?.target;
+    const files = Array.from(input?.files || []);
+    if (files.length === 0) return;
+    try {
+      const next = [...(state._pendingChatAttachments || [])];
+      for (const file of files) {
+        next.push(await fileToAttachment(file));
+      }
+      state._pendingChatAttachments = next;
+      renderPendingAttachments();
+    } catch (err) {
+      showToast(err?.message || '附件读取失败');
+    } finally {
+      if (input) input.value = '';
+    }
+  }
+
+  function removePendingAttachment(id) {
+    state._pendingChatAttachments = (state._pendingChatAttachments || []).filter((item) => item.id !== id);
+    renderPendingAttachments();
+  }
+
+  function summarizePendingAttachments() {
+    const items = Array.isArray(state._pendingChatAttachments) ? state._pendingChatAttachments : [];
+    if (items.length === 0) return '';
+    return `已附加：${items.map((item) => item.name).filter(Boolean).join('，')}`;
+  }
+
+  function consumePendingAttachments() {
+    const items = Array.isArray(state._pendingChatAttachments) ? [...state._pendingChatAttachments] : [];
+    state._pendingChatAttachments = [];
+    renderPendingAttachments();
+    return items.map((item) => {
+      if (item.kind === 'image') {
+        return {
+          kind: 'image',
+          name: item.name,
+          mime_type: item.mime_type,
+          data_url: item.data_url,
+        };
+      }
+      return {
+        kind: 'text_file',
+        name: item.name,
+        mime_type: item.mime_type,
+        text: item.text,
+      };
+    });
+  }
+
   function enterSendingMode() {
     const btn = document.getElementById('mobile-send-btn');
     if (!btn) return;
@@ -126,8 +288,8 @@ export function createMobileInputDockController(deps) {
   }
 
   function stopGeneration() {
-    if (state.activeWs && state.activeWs.readyState === WebSocket.OPEN) {
-      state.activeWs.send(JSON.stringify({ type: 'cancel' }));
+    if (state.activeWs && typeof state.activeWs.abort === 'function') {
+      state.activeWs.abort();
     }
   }
 
@@ -136,7 +298,7 @@ export function createMobileInputDockController(deps) {
     return conv.messages.slice(-contextLimit).map(msg => ({ role: msg.role, content: msg.content }));
   }
 
-  function appendStreamingBubble(modelName) {
+  function appendStreamingBubble() {
     const wrap = document.getElementById('mobile-messages');
     const item = document.createElement('article');
     item.className = 'mobile-message assistant';
@@ -144,7 +306,7 @@ export function createMobileInputDockController(deps) {
 
     const meta = document.createElement('div');
     meta.className = 'mobile-message-meta';
-    meta.textContent = modelName;
+    meta.textContent = ASSISTANT_LABEL;
 
     const bubble = document.createElement('div');
     bubble.className = 'mobile-message-bubble';
@@ -155,92 +317,224 @@ export function createMobileInputDockController(deps) {
     wrap?.appendChild(item);
     if (wrap) wrap.scrollTop = wrap.scrollHeight;
     updateScrollBottomButton();
-    return { item, bubble, p };
+    return { item, bubble, p, meta };
+  }
+
+  function getStreamingDisplay(text) {
+    let visible = String(text || '').replace(/<think>[\s\S]*?<\/think>/gi, '');
+    const openIdx = visible.search(/<think>/i);
+    if (openIdx !== -1) visible = visible.slice(0, openIdx);
+    return visible.trim();
   }
 
   function renderStreamingContent(target, text) {
-    if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
-      target.bubble.innerHTML = DOMPurify.sanitize(marked.parse(text || ''));
-    } else {
-      target.bubble.innerHTML = `<p>${escHtml(text || '').replace(/\n/g, '<br>')}</p>`;
-    }
+    target.p.textContent = getStreamingDisplay(text);
   }
 
-  async function callBackendChat(requestMessages, onDelta, conversationId) {
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`${BACKEND_WS_URL}/ws/chat`);
-      state.activeWs = ws;
+  function createStreamingRenderer(target) {
+    let latestText = '';
+    let frameId = null;
+    const scheduleFrame = () => {
+      if (frameId !== null) return;
+      const raf = window.requestAnimationFrame || ((cb) => window.setTimeout(cb, 16));
+      frameId = raf(() => {
+        frameId = null;
+        renderStreamingContent(target, latestText);
+        scrollMessagesToBottom(false);
+        updateScrollBottomButton();
+      });
+    };
+    return {
+      update(text) {
+        latestText = text;
+        scheduleFrame();
+      },
+      flush(text = latestText) {
+        latestText = text;
+        if (frameId !== null) {
+          const cancel = window.cancelAnimationFrame || window.clearTimeout;
+          cancel(frameId);
+          frameId = null;
+        }
+        renderStreamingContent(target, latestText);
+        scrollMessagesToBottom(false);
+        updateScrollBottomButton();
+      },
+    };
+  }
 
-      ws.onopen = () => {
-        const conv = state.conversations.find(item => item.id === conversationId);
-        ws.send(JSON.stringify({
-          type: 'chat',
-          settings: state.settings,
-          messages: requestMessages,
-          session_id: conversationId || '',
-          scratchpad: conv?.scratchpad || '',
-        }));
-      };
-
-      ws.onmessage = (event) => {
-        let payload;
+  async function callBackendChat(requestMessages, onDelta, conversationId, attachments = [], onStart = null) {
+    const controller = new AbortController();
+    state.activeWs = controller;
+    let streamStarted = false;
+    let sawDelta = false;
+    let streamTimedOut = false;
+    let streamWatchdog = null;
+    const resetStreamWatchdog = () => {
+      window.clearTimeout(streamWatchdog || 0);
+      streamWatchdog = window.setTimeout(() => {
+        streamTimedOut = true;
         try {
-          payload = JSON.parse(event.data);
-        } catch {
+          controller.abort();
+        } catch (_) {}
+      }, sawDelta ? 12000 : 18000);
+    };
+    const result = {
+      usage: null,
+      cancelled: false,
+      timed_out: false,
+      saved_memories: [],
+      saved_session_memories: [],
+      scribe: { updated: false, pair_count: 0 },
+      prompt_snapshot: null,
+      model: '',
+      postEffectId: '',
+    };
+    try {
+      await apiStreamChat({
+        worker: 'partner',
+        messages: requestMessages,
+        attachments,
+        stream: true,
+        conversation_id: conversationId || '',
+      }, (eventName, payload) => {
+        resetStreamWatchdog();
+        if (eventName === 'start') {
+          streamStarted = true;
+          result.model = String(payload.model || result.model || '');
+          onStart?.(payload);
           return;
         }
-        if (payload.type === 'token') {
-          onDelta(payload.data || '');
-        } else if (payload.type === 'done') {
-          state.activeWs = null;
-          state._lastPromptSnapshot = payload.prompt_snapshot || null;
+        if (eventName === 'delta') {
+          streamStarted = true;
+          sawDelta = true;
+          onDelta(payload.text || '');
+          return;
+        }
+        if (eventName === 'usage') {
+          streamStarted = true;
+          result.usage = payload.usage || null;
+          return;
+        }
+        if (eventName === 'done') {
+          streamStarted = true;
+          state._lastPromptSnapshot = payload.debug?.trace?.prompt_snapshot || null;
           import('./settings.js')
             .then(mod => mod.populateDebugSection?.())
             .catch(() => {});
-          resolve({
-            usage: payload.usage || null,
-            cancelled: !!payload.cancelled,
-            saved_memories: payload.saved_memories || [],
-            saved_session_memories: payload.saved_session_memories || [],
-            scribe: payload.scribe || { updated: false, pair_count: 0 },
-            prompt_snapshot: payload.prompt_snapshot || null,
-          });
-        } else if (payload.type === 'error') {
-          state.activeWs = null;
-          reject(new Error(payload.message || '未知错误'));
+          result.usage = payload.usage || result.usage;
+          result.saved_memories = payload.debug?.effects?.saved_memories || [];
+          result.saved_session_memories = payload.debug?.effects?.saved_session_memories || [];
+          result.scribe = payload.debug?.effects?.scribe || result.scribe;
+          result.prompt_snapshot = payload.debug?.trace?.prompt_snapshot || null;
+          result.model = String(payload.model || result.model || '');
+          result.postEffectId = String(payload.debug?.effects?.post_effect_id || '');
+          return;
         }
-      };
-
-      ws.onerror = () => {
-        state.activeWs = null;
-        reject(new Error('WebSocket 连接失败，请检查后端是否运行'));
-      };
-
-      ws.onclose = (event) => {
-        if (state.activeWs === ws) state.activeWs = null;
-        if (event.code !== 1000 && event.code !== 1001) {
-          reject(new Error(`WebSocket 异常断开 (${event.code})`));
+        if (eventName === 'error') {
+          throw new Error(payload.error?.message || '未知错误');
         }
-      };
-    });
+      }, { signal: controller.signal });
+      return result;
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        if (streamTimedOut && !streamStarted) {
+          const fallback = await apiChat({
+            worker: 'partner',
+            messages: requestMessages,
+            attachments,
+            conversation_id: conversationId || '',
+          }, { signal: null });
+          onStart?.(fallback);
+          if (fallback.text) onDelta(fallback.text);
+          return {
+            ...result,
+            usage: fallback.usage || null,
+            saved_memories: fallback.debug?.effects?.saved_memories || [],
+            saved_session_memories: fallback.debug?.effects?.saved_session_memories || [],
+            scribe: fallback.debug?.effects?.scribe || result.scribe,
+            prompt_snapshot: fallback.debug?.trace?.prompt_snapshot || null,
+            model: String(fallback.model || result.model || ''),
+            postEffectId: String(fallback.debug?.effects?.post_effect_id || ''),
+          };
+        }
+        return { ...result, cancelled: true, timed_out: streamTimedOut };
+      }
+      if (!streamStarted) {
+        const fallback = await apiChat({
+          worker: 'partner',
+          messages: requestMessages,
+          attachments,
+          conversation_id: conversationId || '',
+        }, { signal: controller.signal });
+        onStart?.(fallback);
+        if (fallback.text) onDelta(fallback.text);
+        return {
+          ...result,
+          usage: fallback.usage || null,
+          saved_memories: fallback.debug?.effects?.saved_memories || [],
+          saved_session_memories: fallback.debug?.effects?.saved_session_memories || [],
+          scribe: fallback.debug?.effects?.scribe || result.scribe,
+          prompt_snapshot: fallback.debug?.trace?.prompt_snapshot || null,
+          model: String(fallback.model || result.model || ''),
+          postEffectId: String(fallback.debug?.effects?.post_effect_id || ''),
+        };
+      }
+      throw err;
+    } finally {
+      window.clearTimeout(streamWatchdog || 0);
+      state.activeWs = null;
+    }
   }
 
-  async function performChat(conv) {
+  async function pollPostEffects(postEffectId, { attempts = 20, delayMs = 500 } = {}) {
+    const id = String(postEffectId || '').trim();
+    if (!id) return null;
+    for (let index = 0; index < attempts; index += 1) {
+      const data = await apiGetChatPostEffects(id);
+      if (data?.done) return data.effects || null;
+      await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+    }
+    return null;
+  }
+
+  async function performChat(conv, options = {}) {
     enterSendingMode();
-    const modelName = formatCurrentModelLabel();
-    const stream = appendStreamingBubble(modelName);
+    const stream = appendStreamingBubble();
+    const streamRenderer = createStreamingRenderer(stream);
+    const requestMessages = buildRequestMessages(conv);
+    const userContentOverride = typeof options.userContentOverride === 'string'
+      ? options.userContentOverride
+      : null;
+    if (userContentOverride !== null) {
+      for (let index = requestMessages.length - 1; index >= 0; index -= 1) {
+        if (requestMessages[index]?.role !== 'user') continue;
+        requestMessages[index] = { ...requestMessages[index], content: userContentOverride };
+        break;
+      }
+    }
+    const attachments = Array.isArray(options.attachments) ? options.attachments : [];
     let fullContent = '';
 
     try {
-      const result = await callBackendChat(buildRequestMessages(conv), (delta) => {
+      const result = await callBackendChat(requestMessages, (delta) => {
         fullContent += delta;
-        renderStreamingContent(stream, fullContent);
-        scrollMessagesToBottom(false);
-        updateScrollBottomButton();
-      }, conv.id);
+        streamRenderer.update(fullContent);
+      }, conv.id, attachments, (payload) => {
+        const currentModel = String(payload?.model || '').trim();
+        if (currentModel) stream.meta.textContent = currentModel;
+      });
+      streamRenderer.flush(fullContent);
+      if (result?.timed_out) {
+        showToast(fullContent ? '本轮回复收尾超时，已按当前内容结束' : '本轮回复超时');
+      }
+      if (!fullContent && result?.cancelled) {
+        stream.item.remove();
+        return;
+      }
 
       const assistantMsg = createMessage('assistant', fullContent, {
-        model: state.settings?.taskModels?.chat?.modelName || '',
+        model: String(result?.model || stream.meta.textContent || ASSISTANT_LABEL),
         usage: result?.usage || null,
         meta: {
           partnerTokens:
@@ -267,6 +561,25 @@ export function createMobileInputDockController(deps) {
       renderMessages();
       await saveConversations();
       showChatPostEffects(result);
+      const postEffectId = String(result?.postEffectId || '').trim();
+      if (postEffectId) {
+        pollPostEffects(postEffectId)
+          .then(async (effects) => {
+            if (!effects) return;
+            assistantMsg.meta = {
+              ...(assistantMsg.meta || {}),
+              scribeTokens: effects?.scribe?.usage?.total_tokens ?? null,
+            };
+            await saveConversations();
+            renderMessages();
+            showChatPostEffects({
+              saved_memories: effects?.saved_memories || [],
+              saved_session_memories: effects?.saved_session_memories || [],
+              scribe: effects?.scribe || null,
+            });
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       stream.bubble.innerHTML = `<p>${escHtml(err.message)}</p>`;
       stream.item.classList.add('error');
@@ -280,7 +593,8 @@ export function createMobileInputDockController(deps) {
     const input = getInput();
     if (!input) return;
     const content = input.value.trim();
-    if (!content) return;
+    const pendingAttachments = Array.isArray(state._pendingChatAttachments) ? state._pendingChatAttachments : [];
+    if (!content && pendingAttachments.length === 0) return;
 
     let conv = getCurrentConversation();
     if (!conv) {
@@ -289,15 +603,30 @@ export function createMobileInputDockController(deps) {
     }
     if (!conv) return;
 
-    const userMsg = createMessage('user', content);
+    const route = getChatRouteMeta(state.settings || {});
+    if (route.isCloud) {
+      if (!hasAcknowledgedCloudRoute(route, state._cloudSendNoticeShown)) {
+        markCloudRouteAcknowledged(route, state._cloudSendNoticeShown);
+      }
+    }
+
+    const attachmentSummary = summarizePendingAttachments();
+    const persistedContent = content
+      ? [content, attachmentSummary].filter(Boolean).join('\n\n')
+      : attachmentSummary;
+    const userMsg = createMessage('user', persistedContent);
     conv.messages.push(userMsg);
     updateConversationTitle(conv);
     input.value = '';
     autosizeInput();
     renderMessages();
     renderPicker();
-    await saveConversations();
-    await performChat(conv);
+    saveConversations();
+    const attachments = consumePendingAttachments();
+    await performChat(conv, {
+      attachments,
+      userContentOverride: content,
+    });
   }
 
   async function clearContext() {
@@ -329,10 +658,17 @@ export function createMobileInputDockController(deps) {
   }
 
   function bindEvents() {
-    document.getElementById('mobile-send-btn')?.addEventListener('click', sendMessage);
-    document.getElementById('mobile-extra-btn')?.addEventListener('click', toggleExtraMenu);
+    bindTapAction(document.getElementById('mobile-send-btn'), sendMessage);
+    bindTapAction(document.getElementById('mobile-extra-btn'), toggleExtraMenu);
+    document.getElementById('mobile-attach-btn')?.addEventListener('click', openAttachmentPicker);
     document.getElementById('mobile-new-chat-inline-btn')?.addEventListener('click', createInlineConversation);
     document.getElementById('mobile-clear-context-btn')?.addEventListener('click', clearContext);
+    document.getElementById('mobile-attachment-input')?.addEventListener('change', handleAttachmentFiles);
+    document.getElementById('mobile-attachment-tray')?.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-mobile-attachment-remove]');
+      if (!btn) return;
+      removePendingAttachment(btn.dataset.mobileAttachmentRemove || '');
+    });
 
     const input = getInput();
     input?.addEventListener('input', autosizeInput);
@@ -369,6 +705,7 @@ export function createMobileInputDockController(deps) {
   function init() {
     bindEvents();
     autosizeInput();
+    renderPendingAttachments();
     syncShellHeight(true);
     syncViewport();
     bindDockResizeObserver();
